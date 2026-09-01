@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+/* Metric-matched Arial fallback for zero CLS */
+@font-face {
+  font-family: 'Arial-Metric';
+  src: local('Arial');
+  ascent-override: 90%;
+  descent-override: 22.43%;
+  size-adjust: 107%;
+}
+
+:root {
+  /* Font Family - Single typeface rule */
+  --font-inter: 'Inter', 'Arial-Metric', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Brand Colors */
+  --color-brand-blue: #84B8FF;     /* SURFACE ONLY (tints, fills, borders) - NEVER text or small button */
+  --color-interactive: #2C63AE;    /* 6.0:1 contrast on white - text, links, primary interactive */
+  --color-interactive-hover: #225191;
+  --color-ink: #16232F;            /* Primary copy */
+  --color-muted: #5B6B7A;          /* Secondary copy / metadata */
+  --color-hairline: #DDE3EA;       /* Structural 1px border */
+  --color-tint-1: #F2F7FF;         /* Soft brand tint */
+  --color-tint-2: #F7F9FB;         /* Light surface tint */
+  --color-teal: #0B7A6E;           /* Positive / Institutional signal */
+  --color-terracotta: #B4522F;     /* Exclusively reserved for NUEVO badges */
+
+  /* Fluid Typography Scale (10 steps: 11px -> 76px) */
+  --step--2: clamp(0.6875rem, 0.67rem + 0.08vw, 0.75rem);   /* 11px -> 12px Micro-labels */
+  --step--1: clamp(0.8125rem, 0.79rem + 0.15vw, 0.875rem);  /* 13px -> 14px Small text */
+  --step-0:  clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);        /* 15px -> 16px Baseline Body */
+  --step-1:  clamp(1.125rem, 1.06rem + 0.35vw, 1.25rem);    /* 18px -> 20px Lead/Headings */
+  --step-2:  clamp(1.25rem, 1.15rem + 0.6vw, 1.5rem);       /* 20px -> 24px Headings 20-28px */
+  --step-3:  clamp(1.5rem, 1.35rem + 0.9vw, 1.875rem);      /* 24px -> 30px Titles 28-40px */
+  --step-4:  clamp(1.75rem, 1.55rem + 1.2vw, 2.25rem);      /* 28px -> 36px Titles */
+  --step-5:  clamp(2.125rem, 1.85rem + 1.6vw, 2.75rem);     /* 34px -> 44px Display ≥40px */
+  --step-6:  clamp(2.625rem, 2.2rem + 2.4vw, 3.625rem);     /* 42px -> 58px Display Large */
+  --step-7:  clamp(3.125rem, 2.5rem + 3.4vw, 4.75rem);      /* 50px -> 76px Display Hero */
+
+  /* Section Densities */
+  --density-editorial: clamp(3.5rem, 7.5vw, 7rem);   /* 56px -> 112px */
+  --density-default:   clamp(2.5rem, 5.5vw, 5rem);   /* 40px -> 80px */
+  --density-dense:     clamp(1.5rem, 3.5vw, 2.5rem); /* 24px -> 40px */
+
+  /* Max Width & Gutters */
+  --max-width: 1440px;
+  --gutter: clamp(1rem, 3.5vw, 2.5rem);              /* 16px -> 40px */
+  --prose: 68ch;
+
+  /* Strict Radii Specification */
+  --radius-btn: 6px;
+  --radius-card: 6px;
+  --radius-img: 6px;
+  --radius-input: 4px;
+  --radius-badge: 4px;
+  --radius-pill: 9999px;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body {
+  font-family: var(--font-inter);
+  color: var(--color-ink);
+  background-color: #FFFFFF;
+  line-height: 1.5;
+}
+
+/* Signature Typography Classes */
+/* Display ≥40px = weight 700, line-height 100%, letter-spacing -0.035em */
+.type-display {
+  font-family: var(--font-inter);
+  font-size: var(--step-7);
+  font-weight: 700;
+  line-height: 1.0;
+  letter-spacing: -0.035em;
+}
+
+.type-display-md {
+  font-family: var(--font-inter);
+  font-size: var(--step-5);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+/* Titles 28–40px = 700/105%/-0.025em */
+.type-title {
+  font-family: var(--font-inter);
+  font-size: var(--step-4);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.type-title-sm {
+  font-family: var(--font-inter);
+  font-size: var(--step-3);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+/* Headings 20–28px = 700/110%/-0.02em */
+.type-heading {
+  font-family: var(--font-inter);
+  font-size: var(--step-2);
+  font-weight: 700;
+  line-height: 1.10;
+  letter-spacing: -0.02em;
+}
+
+/* Body = 400/150%/0 */
+.type-body {
+  font-family: var(--font-inter);
+  font-size: var(--step-0);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0em;
+}
+
+.type-body-sm {
+  font-family: var(--font-inter);
+  font-size: var(--step--1);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0em;
+}
+
+/* Micro-labels = 600, UPPERCASE, 11–12px, +0.12em */
+.type-micro {
+  font-family: var(--font-inter);
+  font-size: var(--step--2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+}
+
+/* Accessibility: Visible Focus Visible Rings */
+:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}
+
+/* Accessibility: Prefers-reduced-motion disabling all motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Sticky mobile bar shadow - ONLY allowed shadow in the app */
+.shadow-mobile-bar {
+  box-shadow: 0 -4px 16px rgba(22, 35, 47, 0.08);
+}
+
+/* Max Container and Gutters */
+.max-container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+}
+
+.prose-measure {
+  max-width: var(--prose);
+}
+
+/* Aspect Ratios strictly 3:4 and 1:1 */
+.aspect-3-4 {
+  aspect-ratio: 3 / 4;
+}
+
+.aspect-1-1 {
+  aspect-ratio: 1 / 1;
+}
+

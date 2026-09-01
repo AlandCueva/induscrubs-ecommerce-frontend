@@ -1,0 +1,532 @@
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Check, SlidersHorizontal, X } from 'lucide-react';
+import { PRODUCTS, CATEGORIES, PERMANENT_COLORS, LIMITED_COLORS } from '../data/products';
+import { ProductCard } from './BestSellersSection';
+
+const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const BRANDS = ['Cherokee', "Grey's Anatomy", 'Skechers', 'FIGS'];
+const GENDERS = ['Mujer', 'Hombre'];
+const SORT_OPTIONS = [
+  'Relevancia',
+  'Precio menor a mayor',
+  'Precio mayor a menor',
+  'Más vendidos',
+  'Más nuevos',
+];
+
+interface CatalogPageProps {
+  onNavigate?: (view: any, extra?: any) => void;
+  initialFilter?: {
+    filterType: 'brand' | 'gender' | 'newArrivals' | 'color' | 'category';
+    value: any;
+  };
+}
+
+export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFilter }) => {
+  // Visual filter selection state
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [priceMin, setPriceMin] = useState<string>('');
+  const [priceMax, setPriceMax] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('Relevancia');
+  const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
+  const [onlyNewArrivals, setOnlyNewArrivals] = useState<boolean>(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
+
+  // Lock body scroll when mobile overlay is open
+  useEffect(() => {
+    if (mobileFiltersOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileFiltersOpen]);
+
+  // Pre-select filters based on initialFilter prop on mount or update
+  useEffect(() => {
+    if (!initialFilter) return;
+
+    if (initialFilter.filterType === 'brand' && initialFilter.value) {
+      setSelectedBrands([initialFilter.value]);
+    } else if (initialFilter.filterType === 'gender' && initialFilter.value) {
+      setSelectedGenders([initialFilter.value]);
+    } else if (initialFilter.filterType === 'newArrivals') {
+      setOnlyNewArrivals(Boolean(initialFilter.value));
+    } else if (initialFilter.filterType === 'color' && initialFilter.value) {
+      const allColors = [...PERMANENT_COLORS, ...LIMITED_COLORS];
+      const match = allColors.find(
+        (c) =>
+          c.name.toLowerCase() === String(initialFilter.value).toLowerCase() ||
+          c.id === initialFilter.value
+      );
+      if (match) {
+        setSelectedColors([match.id]);
+      }
+    } else if (initialFilter.filterType === 'category' && initialFilter.value) {
+      setSelectedCategories([initialFilter.value]);
+    }
+  }, [initialFilter]);
+
+  const toggleCategory = (catName: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(catName) ? prev.filter((c) => c !== catName) : [...prev, catName]
+    );
+  };
+
+  const toggleColor = (colorId: string) => {
+    setSelectedColors((prev) =>
+      prev.includes(colorId) ? prev.filter((c) => c !== colorId) : [...prev, colorId]
+    );
+  };
+
+  const toggleSize = (size: string) => {
+    setSelectedSizes((prev) =>
+      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
+    );
+  };
+
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands((prev) =>
+      prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+    );
+  };
+
+  const toggleGender = (gender: string) => {
+    setSelectedGenders((prev) =>
+      prev.includes(gender) ? prev.filter((g) => g !== gender) : [...prev, gender]
+    );
+  };
+
+  const handleClearAll = () => {
+    setSelectedCategories([]);
+    setSelectedColors([]);
+    setSelectedSizes([]);
+    setSelectedBrands([]);
+    setPriceMin('');
+    setPriceMax('');
+    setSortBy('Relevancia');
+    setSelectedGenders([]);
+    setOnlyNewArrivals(false);
+  };
+
+  // Reusable Filter Content
+  const renderFilterContent = (isMobile: boolean = false) => (
+    <>
+      {/* 1. Header: "Filtros" label + "Limpiar todo" link */}
+      <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span
+          className="text-base font-bold text-[#16232F]"
+          style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+        >
+          Filtros
+        </span>
+        <button
+          type="button"
+          onClick={handleClearAll}
+          className="text-xs font-medium text-[#2C63AE] hover:underline cursor-pointer"
+        >
+          Limpiar todo
+        </button>
+      </div>
+
+      {/* 2. Categoría — checkbox list of the 6 categories */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Categoría
+        </span>
+        <div className="space-y-2.5">
+          {CATEGORIES.map((cat) => {
+            const isChecked = selectedCategories.includes(cat.name);
+            return (
+              <label
+                key={cat.id}
+                onClick={() => toggleCategory(cat.name)}
+                className="flex items-start gap-2.5 text-xs text-[#16232F] hover:text-[#2C63AE] cursor-pointer select-none"
+              >
+                <div
+                  className={`w-4 h-4 mt-0.5 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
+                    isChecked
+                      ? 'bg-[#2C63AE] border-[#2C63AE] text-white'
+                      : 'border-[#DDE3EA] bg-white hover:border-[#16232F]/50'
+                  }`}
+                >
+                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                </div>
+                <span className="leading-tight">{cat.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Color — swatch grid split into "Permanentes" and "Edición limitada" */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Color
+        </span>
+        
+        {/* Permanentes Sub-group */}
+        <div className="mb-3">
+          <span className="block text-[11px] font-medium text-[#5A6E85] mb-2">
+            Permanentes
+          </span>
+          <div className="grid grid-cols-6 gap-2">
+            {PERMANENT_COLORS.map((color) => {
+              const isSelected = selectedColors.includes(color.id);
+              return (
+                <button
+                  key={color.id}
+                  type="button"
+                  title={color.name}
+                  onClick={() => toggleColor(color.id)}
+                  className={`w-7 h-7 rounded-[4px] border border-black/10 transition-all cursor-pointer ${
+                    isSelected ? 'ring-2 ring-[#16232F] ring-offset-2' : 'hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: color.hex }}
+                  aria-label={color.name}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Edición limitada Sub-group */}
+        <div>
+          <span className="block text-[11px] font-medium text-[#5A6E85] mb-2">
+            Edición limitada
+          </span>
+          <div className="grid grid-cols-6 gap-2">
+            {LIMITED_COLORS.map((color) => {
+              const isSelected = selectedColors.includes(color.id);
+              return (
+                <button
+                  key={color.id}
+                  type="button"
+                  title={color.name}
+                  onClick={() => toggleColor(color.id)}
+                  className={`w-7 h-7 rounded-[4px] border border-black/10 transition-all cursor-pointer ${
+                    isSelected ? 'ring-2 ring-[#16232F] ring-offset-2' : 'hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: color.hex }}
+                  aria-label={color.name}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Talla — wrapped chip buttons, XXS to 3XL */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Talla
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {SIZES.map((size) => {
+            const isSelected = selectedSizes.includes(size);
+            return (
+              <button
+                key={size}
+                type="button"
+                onClick={() => toggleSize(size)}
+                className={`px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#2C63AE] text-[#FFFFFF] border-[#2C63AE]'
+                    : 'bg-[#FFFFFF] text-[#16232F] border-[#DDE3EA] hover:border-[#16232F]/50'
+                }`}
+              >
+                {size}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 5. Marca — wrapped chip buttons */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Marca
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {BRANDS.map((brand) => {
+            const isSelected = selectedBrands.includes(brand);
+            return (
+              <button
+                key={brand}
+                type="button"
+                onClick={() => toggleBrand(brand)}
+                className={`px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#2C63AE] text-[#FFFFFF] border-[#2C63AE]'
+                    : 'bg-[#FFFFFF] text-[#16232F] border-[#DDE3EA] hover:border-[#16232F]/50'
+                }`}
+              >
+                {brand}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 6. Rango de precio */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Rango de precio
+        </span>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor={isMobile ? 'm-price-min' : 'price-min'} className="block text-[11px] font-medium text-[#5A6E85] mb-1">
+              Desde ($)
+            </label>
+            <input
+              id={isMobile ? 'm-price-min' : 'price-min'}
+              type="number"
+              min="0"
+              placeholder="0"
+              value={priceMin}
+              onChange={(e) => setPriceMin(e.target.value)}
+              className="w-full h-8 px-2.5 text-xs text-[#16232F] bg-white border border-[#DDE3EA] rounded-[4px] focus:outline-none focus:border-[#2C63AE]"
+            />
+          </div>
+          <div>
+            <label htmlFor={isMobile ? 'm-price-max' : 'price-max'} className="block text-[11px] font-medium text-[#5A6E85] mb-1">
+              Hasta ($)
+            </label>
+            <input
+              id={isMobile ? 'm-price-max' : 'price-max'}
+              type="number"
+              min="0"
+              placeholder="100"
+              value={priceMax}
+              onChange={(e) => setPriceMax(e.target.value)}
+              className="w-full h-8 px-2.5 text-xs text-[#16232F] bg-white border border-[#DDE3EA] rounded-[4px] focus:outline-none focus:border-[#2C63AE]"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 7. Ordenar por */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <label htmlFor={isMobile ? 'm-sort-by-select' : 'sort-by-select'} className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Ordenar por
+        </label>
+        <select
+          id={isMobile ? 'm-sort-by-select' : 'sort-by-select'}
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full h-9 px-2.5 text-xs text-[#16232F] bg-white border border-[#DDE3EA] rounded-[4px] focus:outline-none focus:border-[#2C63AE] cursor-pointer"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 8. Género */}
+      <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
+        <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
+          Género
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {GENDERS.map((gender) => {
+            const isSelected = selectedGenders.includes(gender);
+            return (
+              <button
+                key={gender}
+                type="button"
+                onClick={() => toggleGender(gender)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-[4px] border transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#2C63AE] text-[#FFFFFF] border-[#2C63AE]'
+                    : 'bg-[#FFFFFF] text-[#16232F] border-[#DDE3EA] hover:border-[#16232F]/50'
+                }`}
+              >
+                {gender}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 9. Toggle switch: "Solo nuevos ingresos" */}
+      <div className="pb-4 mb-5 border-b border-[#EAEFF4]">
+        <label
+          onClick={() => setOnlyNewArrivals(!onlyNewArrivals)}
+          className="flex items-center justify-between cursor-pointer select-none"
+        >
+          <span className="text-xs font-medium text-[#16232F]">
+            Solo nuevos ingresos
+          </span>
+          <div
+            role="switch"
+            aria-checked={onlyNewArrivals}
+            className={`w-10 h-5 p-0.5 rounded-[4px] transition-colors flex items-center ${
+              onlyNewArrivals ? 'bg-[#2C63AE]' : 'bg-[#DDE3EA]'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 bg-white rounded-[3px] shadow-sm transition-transform ${
+                onlyNewArrivals ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </div>
+        </label>
+      </div>
+
+      {/* 10. "Aplicar filtros" button */}
+      <button
+        type="button"
+        onClick={() => {
+          if (isMobile) {
+            setMobileFiltersOpen(false);
+          }
+        }}
+        className="w-full h-11 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-xs font-bold uppercase tracking-wider rounded-[6px] transition-colors flex items-center justify-center min-h-[44px] shadow-sm cursor-pointer"
+        style={{
+          fontFamily: "'Inter Variable', Inter, sans-serif",
+          fontWeight: 700,
+        }}
+      >
+        Aplicar filtros
+      </button>
+    </>
+  );
+
+  return (
+    <main id="catalog-content" className="w-full min-h-[60vh] bg-[#FFFFFF] py-6 sm:py-10 md:py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Back Link to Home */}
+        <button
+          type="button"
+          onClick={() => onNavigate?.('home')}
+          className="inline-flex items-center gap-2 text-sm font-medium text-[#5A6E85] hover:text-[#16232F] transition-colors mb-6 sm:mb-8 cursor-pointer group"
+          aria-label="Volver al Inicio"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+          <span>Volver al Inicio</span>
+        </button>
+
+        {/* Page Header */}
+        <div className="mb-6 sm:mb-10">
+          <span className="block text-xs font-semibold uppercase tracking-wider text-[#2C63AE] mb-1.5">
+            Explorar
+          </span>
+          <h1
+            className="text-[#16232F]"
+            style={{
+              fontFamily: "'Inter Variable', Inter, sans-serif",
+              fontWeight: 700,
+              fontSize: '32px',
+              lineHeight: '1.05',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Nuestra Colección
+          </h1>
+        </div>
+
+        {/* Mobile Filter Button placed above the product grid */}
+        <div className="md:hidden mb-6">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(true)}
+            className="w-full h-11 px-4 rounded-[6px] border border-[#DDE3EA] bg-[#FFFFFF] hover:border-[#16232F]/50 text-[#16232F] flex items-center justify-between text-sm font-semibold transition-colors cursor-pointer min-h-[44px]"
+          >
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-[#2C63AE]" />
+              <span>Filtros</span>
+            </span>
+            <span className="text-xs text-[#5A6E85] font-normal">
+              {selectedCategories.length +
+                selectedColors.length +
+                selectedSizes.length +
+                selectedBrands.length +
+                selectedGenders.length +
+                (onlyNewArrivals ? 1 : 0) > 0
+                ? `${
+                    selectedCategories.length +
+                    selectedColors.length +
+                    selectedSizes.length +
+                    selectedBrands.length +
+                    selectedGenders.length +
+                    (onlyNewArrivals ? 1 : 0)
+                  } seleccionado(s)`
+                : 'Ver todos'}
+            </span>
+          </button>
+        </div>
+
+        {/* Two-Column Layout: Persistent Left Sidebar on Desktop (~270px) + Product Grid */}
+        <div className="flex flex-col md:flex-row items-start gap-8 lg:gap-10">
+          {/* 1. Left Sidebar Filter Panel (Hidden on mobile, block on md+) */}
+          <aside
+            id="catalog-filters-sidebar"
+            aria-label="Filtros del catálogo"
+            className="hidden md:block md:w-[270px] shrink-0 bg-[#FFFFFF] rounded-[6px] border border-[#EAEFF4] p-5"
+          >
+            {renderFilterContent(false)}
+          </aside>
+
+          {/* 2. Right Column: Product Grid */}
+          <div className="flex-1 min-w-0 w-full">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
+              {PRODUCTS.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onClick={() => onNavigate?.('pdp', product.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Full-Screen Filter Overlay */}
+      {mobileFiltersOpen && (
+        <div
+          id="mobile-filters-overlay"
+          className="fixed inset-0 z-50 bg-[#000000]/60 backdrop-blur-xs flex justify-end md:hidden animate-fade-in"
+          onClick={() => setMobileFiltersOpen(false)}
+        >
+          <div
+            className="w-full h-full bg-[#FFFFFF] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Bar of Mobile Overlay */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#EAEFF4] shrink-0">
+              <span
+                className="text-lg font-bold text-[#16232F]"
+                style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+              >
+                Filtros
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="w-9 h-9 rounded-[4px] border border-[#DDE3EA] flex items-center justify-center text-[#16232F] hover:bg-[#F2F7FF] transition-colors cursor-pointer"
+                aria-label="Cerrar filtros"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Filter Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-2">
+              {renderFilterContent(true)}
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+};
+
+
