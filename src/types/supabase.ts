@@ -42,6 +42,7 @@ export type Database = {
           hex: string
           id: string
           name: string
+          sort_order: number
         }
         Insert: {
           color_group: string
@@ -49,6 +50,7 @@ export type Database = {
           hex: string
           id: string
           name: string
+          sort_order?: number
         }
         Update: {
           color_group?: string
@@ -56,6 +58,7 @@ export type Database = {
           hex?: string
           id?: string
           name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -465,6 +468,23 @@ export type Database = {
           p_store_branch: string
         }
         Returns: string
+      }
+      create_public_order: {
+        Args: {
+          p_customer_email: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_delivery_address: string
+          p_delivery_type: Database["public"]["Enums"]["delivery_type"]
+          p_items: Json
+          p_notes: string
+          p_payment_method: Database["public"]["Enums"]["payment_method"]
+          p_payment_proof_url: string
+        }
+        Returns: {
+          order_number: string
+          total: number
+        }[]
       }
       delete_order: { Args: { p_order_id: string }; Returns: undefined }
       update_order_items: {

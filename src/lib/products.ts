@@ -17,6 +17,11 @@ export interface ProductColorOption {
   name: string;
   hex: string;
   colorGroup: string; // 'Permanentes' | 'Edición limitada'
+  sortOrder: number;
+}
+
+export interface ColorPaletteTile extends ProductColorOption {
+  imageUrl: string;
 }
 
 export interface Product {
@@ -74,7 +79,7 @@ const PRODUCT_SELECT = `
   product_images ( url, sort_order, color_id ),
   product_variants ( size_code, color_id, stock ),
   product_sizes ( size_code ),
-  product_colors ( colors ( id, name, hex, color_group ) )
+  product_colors ( colors ( id, name, hex, color_group, sort_order ) )
 `;
 
 interface RawProductRow {
@@ -95,7 +100,9 @@ interface RawProductRow {
   product_images: { url: string; sort_order: number; color_id: string | null }[];
   product_variants: { size_code: string; color_id: string; stock: number }[];
   product_sizes: { size_code: string }[];
-  product_colors: { colors: { id: string; name: string; hex: string; color_group: string } | null }[];
+  product_colors: {
+    colors: { id: string; name: string; hex: string; color_group: string; sort_order: number } | null;
+  }[];
 }
 
 function mapRow(row: RawProductRow): Product {
@@ -125,7 +132,8 @@ function mapRow(row: RawProductRow): Product {
     colors: row.product_colors
       .map((pc) => pc.colors)
       .filter((c): c is NonNullable<typeof c> => c !== null)
-      .map((c) => ({ id: c.id, name: c.name, hex: c.hex, colorGroup: c.color_group })),
+      .map((c) => ({ id: c.id, name: c.name, hex: c.hex, colorGroup: c.color_group, sortOrder: c.sort_order }))
+      .sort((a, b) => a.sortOrder - b.sortOrder),
     sizeCodes: row.product_sizes.map((s) => s.size_code),
   };
 }
@@ -178,12 +186,44 @@ export async function fetchCategories(): Promise<Category[]> {
 export async function fetchColors(): Promise<ProductColorOption[]> {
   const { data, error } = await supabase
     .from('colors')
-    .select('id, name, hex, color_group')
-    .order('color_group')
-    .order('name');
+    .select('id, name, hex, color_group, sort_order')
+    .order('sort_order');
 
   if (error) throw error;
-  return data.map((c) => ({ id: c.id, name: c.name, hex: c.hex, colorGroup: c.color_group }));
+  return data.map((c) => ({
+    id: c.id,
+    name: c.name,
+    hex: c.hex,
+    colorGroup: c.color_group,
+    sortOrder: c.sort_order,
+  }));
+}
+
+// Picks one real tagged product photo per color (most recently added), for
+// tile-style color pickers. Colors with no tagged photo yet are omitted
+// entirely — same "hide, don't placeholder" rule as brands with no logo.
+export async function fetchColorPaletteTiles(): Promise<ColorPaletteTile[]> {
+  const [colors, { data: images, error }] = await Promise.all([
+    fetchColors(),
+    supabase
+      .from('product_images')
+      .select('color_id, url, created_at')
+      .not('color_id', 'is', null)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (error) throw error;
+
+  const photoByColorId = new Map<string, string>();
+  for (const img of images) {
+    if (img.color_id && !photoByColorId.has(img.color_id)) {
+      photoByColorId.set(img.color_id, img.url);
+    }
+  }
+
+  return colors
+    .filter((c) => photoByColorId.has(c.id))
+    .map((c) => ({ ...c, imageUrl: photoByColorId.get(c.id)! }));
 }
 
 export async function fetchSizes(): Promise<Size[]> {
