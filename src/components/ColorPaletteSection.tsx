@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Section } from './Section';
-import { Product } from '../types';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { fetchColors, ProductColorOption } from '../lib/products';
 
 interface ColorPaletteSectionProps {
-  onSelectProduct?: (product: Product, colorId?: string) => void;
   onNavigateToCatalogWithColor?: (colorId: string) => void;
   onNavigateToCatalog?: () => void;
   onNavigate?: (view: any, extra?: any) => void;
 }
 
-const COLOR_MAPPING: Record<string, string | undefined> = {
+// Maps this section's curated photo tiles to a real color name to look up
+// against the live-fetched palette (no live color currently backs "White").
+const TILE_TO_COLOR_NAME: Record<string, string | undefined> = {
   Red: 'Vino Borgoña',
   Black: 'Negro Azabache',
   Blue: 'Ceil Blue Médico',
@@ -73,15 +74,25 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isJumpingRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [liveColors, setLiveColors] = useState<ProductColorOption[]>([]);
+
+  useEffect(() => {
+    fetchColors()
+      .then(setLiveColors)
+      .catch(() => setLiveColors([]));
+  }, []);
 
   // Derive real active index (0 to 4)
   const selectedIndex = (desktopDisplayIndex - 2 + COLOR_TILES.length) % COLOR_TILES.length;
 
   const handleColorClick = (idx: number) => {
     const tile = COLOR_TILES[idx];
-    const mappedColor = tile ? COLOR_MAPPING[tile.label] : undefined;
-    if (mappedColor && onNavigate) {
-      onNavigate('catalog', { filterType: 'color', value: mappedColor });
+    const mappedName = tile ? TILE_TO_COLOR_NAME[tile.label] : undefined;
+    const liveColor = mappedName
+      ? liveColors.find((c) => c.name.toLowerCase() === mappedName.toLowerCase())
+      : undefined;
+    if (liveColor && onNavigate) {
+      onNavigate('catalog', { filterType: 'color', value: liveColor.id });
     } else {
       handleSelectRealIndex(idx);
     }

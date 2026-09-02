@@ -1,46 +1,28 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Section } from './Section';
-
-interface BrandItem {
-  id: string;
-  name: string;
-  logo: string;
-  className?: string;
-}
-
-const BRANDS: BrandItem[] = [
-  {
-    id: 'cherokee',
-    name: 'Cherokee',
-    logo: 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/cherokee.png',
-  },
-  {
-    id: 'greys-anatomy',
-    name: "Grey's Anatomy",
-    logo: 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/greysanatomy.png',
-  },
-  {
-    id: 'skechers',
-    name: 'Skechers',
-    logo: 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/skechers.png',
-  },
-  {
-    id: 'figs',
-    name: 'FIGS',
-    logo: 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/figslogo1%20(1).webp',
-    className: 'w-[190px] sm:w-[223px]',
-  },
-];
+import { Brand, fetchBrands } from '../lib/products';
 
 interface BrandsSectionProps {
   onNavigate?: (view: any, extra?: any) => void;
 }
 
 export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+
+  useEffect(() => {
+    fetchBrands()
+      .then(setBrands)
+      .catch(() => setBrands([]))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  // Skip brands with no logo — nothing to render a broken <img> from.
+  const brandsWithLogo = brands.filter((b) => b.logoUrl);
 
   const checkScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -62,6 +44,11 @@ export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
     };
   }, [checkScroll]);
 
+  // Re-measure once the live brand list actually renders (layout width changes after async load).
+  useEffect(() => {
+    checkScroll();
+  }, [brandsWithLogo.length, checkScroll]);
+
   const handleScroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
     const container = scrollRef.current;
@@ -71,6 +58,10 @@ export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
       behavior: 'smooth',
     });
   };
+
+  if (!isLoading && brandsWithLogo.length === 0) {
+    return null;
+  }
 
   return (
     <Section
@@ -96,31 +87,36 @@ export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
           ref={scrollRef}
           className="w-full flex items-center overflow-x-auto scroll-smooth snap-x snap-mandatory py-4 px-6 sm:px-10 gap-6 sm:gap-10 md:gap-14 lg:gap-16 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden justify-start md:justify-center"
         >
-          {BRANDS.map((brand) => (
-            <div
-              key={brand.id}
-              onClick={() => onNavigate?.('catalog', { filterType: 'brand', value: brand.name })}
-              className="flex-shrink-0 snap-center flex items-center justify-center p-3 sm:p-4 min-w-[200px] sm:min-w-[240px] md:min-w-0 select-none cursor-pointer hover:scale-105 transition-transform bg-[#FFFFFF] rounded-[6px]"
-              role="button"
-              tabIndex={0}
-              aria-label={`Filtrar por marca ${brand.name}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onNavigate?.('catalog', { filterType: 'brand', value: brand.name });
-                }
-              }}
-            >
-              <img
-                src={brand.logo}
-                alt={brand.name}
-                className={`h-14 sm:h-18 md:h-22 lg:h-26 ${
-                  brand.className || 'w-auto'
-                } max-w-[190px] sm:max-w-[240px] md:max-w-[300px] object-contain grayscale hover:grayscale-0 transition-all duration-300 ease-out`}
-                loading="lazy"
-              />
-            </div>
-          ))}
+          {isLoading
+            ? [0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 h-14 sm:h-18 md:h-22 lg:h-26 w-[160px] sm:w-[200px] bg-[#F7F9FB] rounded-[6px] animate-pulse"
+                />
+              ))
+            : brandsWithLogo.map((brand) => (
+                <div
+                  key={brand.id}
+                  onClick={() => onNavigate?.('catalog', { filterType: 'brand', value: brand.id })}
+                  className="flex-shrink-0 snap-center flex items-center justify-center p-3 sm:p-4 min-w-[200px] sm:min-w-[240px] md:min-w-0 select-none cursor-pointer hover:scale-105 transition-transform bg-[#FFFFFF] rounded-[6px]"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Filtrar por marca ${brand.name}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onNavigate?.('catalog', { filterType: 'brand', value: brand.id });
+                    }
+                  }}
+                >
+                  <img
+                    src={brand.logoUrl!}
+                    alt={brand.name}
+                    className="h-14 sm:h-18 md:h-22 lg:h-26 w-auto max-w-[190px] sm:max-w-[240px] md:max-w-[300px] object-contain grayscale hover:grayscale-0 transition-all duration-300 ease-out"
+                    loading="lazy"
+                  />
+                </div>
+              ))}
         </div>
 
         {/* Right Arrow Navigation Button */}
@@ -137,4 +133,3 @@ export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
     </Section>
   );
 };
-

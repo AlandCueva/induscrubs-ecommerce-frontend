@@ -15,6 +15,7 @@ import { CatalogPage } from './components/CatalogPage';
 import { PDPPage } from './components/PDPPage';
 import { CheckoutPage } from './components/CheckoutPage';
 import { CartDrawer } from './components/CartDrawer';
+import { SearchOverlay } from './components/SearchOverlay';
 import { CartItem } from './types';
 
 type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b';
@@ -25,6 +26,7 @@ export default function App() {
   const [initialFilter, setInitialFilter] = useState<any>(undefined);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   // Cart actions
   const handleAddToCart = (item: {
@@ -33,10 +35,14 @@ export default function App() {
     size: string;
     price: number;
     image?: string;
+    colorId?: string;
   }) => {
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (i) => i.productId === item.productId && i.size === item.size
+        (i) =>
+          i.productId === item.productId &&
+          i.size === item.size &&
+          (i.colorId ?? null) === (item.colorId ?? null)
       );
       if (existingIndex > -1) {
         const updated = [...prev];
@@ -47,10 +53,11 @@ export default function App() {
         return updated;
       }
       const newItem: CartItem = {
-        id: `${item.productId}-${item.size}`,
+        id: `${item.productId}-${item.size}-${item.colorId ?? 'nocolor'}`,
         productId: item.productId,
         name: item.name,
         size: item.size,
+        colorId: item.colorId,
         price: item.price,
         qty: 1,
         image: item.image,
@@ -76,6 +83,10 @@ export default function App() {
 
   const handleRemoveCartItem = (id: string) => {
     setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleClearCart = () => {
+    setCart([]);
   };
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -104,7 +115,7 @@ export default function App() {
         onNavigate={handleNavigate}
         cartCount={totalCartCount}
         onOpenCart={() => setIsCartOpen((prev) => !prev)}
-        onOpenSearch={() => {}}
+        onOpenSearch={() => setIsSearchOpen(true)}
       />
 
       {/* Main Content View Switcher with top padding compensation for non-home views (compact fixed navbar height) */}
@@ -126,7 +137,6 @@ export default function App() {
             {/* 3. Compra por Color */}
             <ColorPaletteSection
               onNavigate={handleNavigate}
-              onSelectProduct={() => {}}
               onNavigateToCatalogWithColor={(colorName) => handleNavigate('catalog', { filterType: 'color', value: colorName })}
               onNavigateToCatalog={() => handleNavigate('catalog')}
             />
@@ -173,6 +183,7 @@ export default function App() {
           <CheckoutPage
             items={cart}
             onNavigate={handleNavigate}
+            onClearCart={handleClearCart}
           />
         )}
       </div>
@@ -188,6 +199,13 @@ export default function App() {
         onUpdateQty={handleUpdateCartQty}
         onRemoveItem={handleRemoveCartItem}
         onNavigateToCatalog={() => handleNavigate('catalog')}
+        onNavigate={handleNavigate}
+      />
+
+      {/* Search Overlay */}
+      <SearchOverlay
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
         onNavigate={handleNavigate}
       />
     </div>

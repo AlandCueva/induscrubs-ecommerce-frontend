@@ -1,10 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Check, SlidersHorizontal, X } from 'lucide-react';
-import { PRODUCTS, CATEGORIES, PERMANENT_COLORS, LIMITED_COLORS } from '../data/products';
+import {
+  Product,
+  Category,
+  ProductColorOption,
+  Size,
+  Brand,
+  fetchProducts,
+  fetchCategories,
+  fetchColors,
+  fetchSizes,
+  fetchBrands,
+  isNewArrival,
+} from '../lib/products';
 import { ProductCard } from './BestSellersSection';
 
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-const BRANDS = ['Cherokee', "Grey's Anatomy", 'Skechers', 'FIGS'];
 const GENDERS = ['Mujer', 'Hombre'];
 const SORT_OPTIONS = [
   'Relevancia',
@@ -23,7 +33,34 @@ interface CatalogPageProps {
 }
 
 export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFilter }) => {
-  // Visual filter selection state
+  // Live catalog data
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [colors, setColors] = useState<ProductColorOption[]>([]);
+  const [sizes, setSizes] = useState<Size[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    Promise.all([fetchProducts(), fetchCategories(), fetchColors(), fetchSizes(), fetchBrands()])
+      .then(([productsData, categoriesData, colorsData, sizesData, brandsData]) => {
+        setProducts(productsData);
+        setCategories(categoriesData);
+        setColors(colorsData);
+        setSizes(sizesData);
+        setBrands(brandsData);
+      })
+      .catch(() => {
+        setProducts([]);
+        setCategories([]);
+        setColors([]);
+        setSizes([]);
+        setBrands([]);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  // Visual filter selection state — categories/colors/brands are stored by id
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
@@ -47,34 +84,37 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
     };
   }, [mobileFiltersOpen]);
 
-  // Pre-select filters based on initialFilter prop on mount or update
+  // Pre-select filters based on initialFilter prop — re-runs once the matching
+  // live list (categories/colors/brands) has finished loading, since navigation
+  // can arrive before the fetch that resolves names/ids to filter against.
   useEffect(() => {
     if (!initialFilter) return;
 
     if (initialFilter.filterType === 'brand' && initialFilter.value) {
-      setSelectedBrands([initialFilter.value]);
+      const match = brands.find(
+        (b) => b.name.toLowerCase() === String(initialFilter.value).toLowerCase() || b.id === initialFilter.value
+      );
+      if (match) setSelectedBrands([match.id]);
     } else if (initialFilter.filterType === 'gender' && initialFilter.value) {
       setSelectedGenders([initialFilter.value]);
     } else if (initialFilter.filterType === 'newArrivals') {
       setOnlyNewArrivals(Boolean(initialFilter.value));
     } else if (initialFilter.filterType === 'color' && initialFilter.value) {
-      const allColors = [...PERMANENT_COLORS, ...LIMITED_COLORS];
-      const match = allColors.find(
-        (c) =>
-          c.name.toLowerCase() === String(initialFilter.value).toLowerCase() ||
-          c.id === initialFilter.value
+      const match = colors.find(
+        (c) => c.name.toLowerCase() === String(initialFilter.value).toLowerCase() || c.id === initialFilter.value
       );
-      if (match) {
-        setSelectedColors([match.id]);
-      }
+      if (match) setSelectedColors([match.id]);
     } else if (initialFilter.filterType === 'category' && initialFilter.value) {
-      setSelectedCategories([initialFilter.value]);
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === String(initialFilter.value).toLowerCase() || c.id === initialFilter.value
+      );
+      if (match) setSelectedCategories([match.id]);
     }
-  }, [initialFilter]);
+  }, [initialFilter, brands, colors, categories]);
 
-  const toggleCategory = (catName: string) => {
+  const toggleCategory = (catId: string) => {
     setSelectedCategories((prev) =>
-      prev.includes(catName) ? prev.filter((c) => c !== catName) : [...prev, catName]
+      prev.includes(catId) ? prev.filter((c) => c !== catId) : [...prev, catId]
     );
   };
 
@@ -90,9 +130,9 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
     );
   };
 
-  const toggleBrand = (brand: string) => {
+  const toggleBrand = (brandId: string) => {
     setSelectedBrands((prev) =>
-      prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+      prev.includes(brandId) ? prev.filter((b) => b !== brandId) : [...prev, brandId]
     );
   };
 
@@ -114,6 +154,60 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
     setOnlyNewArrivals(false);
   };
 
+  const permanentColors = colors.filter((c) => c.colorGroup === 'Permanentes');
+  const limitedColors = colors.filter((c) => c.colorGroup !== 'Permanentes');
+
+  const filteredProducts = useMemo(() => {
+    const minPrice = priceMin ? parseFloat(priceMin) : undefined;
+    const maxPrice = priceMax ? parseFloat(priceMax) : undefined;
+
+    let result = products.filter((p) => {
+      if (selectedCategories.length > 0 && !selectedCategories.includes(p.categoryId)) return false;
+      if (selectedColors.length > 0 && !p.colors.some((c) => selectedColors.includes(c.id))) return false;
+      if (selectedSizes.length > 0 && !p.sizeCodes.some((s) => selectedSizes.includes(s))) return false;
+      if (selectedBrands.length > 0 && (!p.brandId || !selectedBrands.includes(p.brandId))) return false;
+      if (selectedGenders.length > 0 && !selectedGenders.includes(p.gender)) return false;
+      if (minPrice !== undefined && p.finalPrice < minPrice) return false;
+      if (maxPrice !== undefined && p.finalPrice > maxPrice) return false;
+      if (onlyNewArrivals && !isNewArrival(p.createdAt)) return false;
+      return true;
+    });
+
+    if (sortBy === 'Precio menor a mayor') {
+      result = [...result].sort((a, b) => a.finalPrice - b.finalPrice);
+    } else if (sortBy === 'Precio mayor a menor') {
+      result = [...result].sort((a, b) => b.finalPrice - a.finalPrice);
+    } else if (sortBy === 'Más nuevos') {
+      result = [...result].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sortBy === 'Más vendidos') {
+      // Placeholder: no sales/order-count data is wired up yet, so this falls
+      // back to newest-created (same placeholder rule as the homepage Best Sellers section).
+      result = [...result].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    // 'Relevancia' keeps the order returned by fetchProducts (created_at desc)
+
+    return result;
+  }, [
+    products,
+    selectedCategories,
+    selectedColors,
+    selectedSizes,
+    selectedBrands,
+    selectedGenders,
+    priceMin,
+    priceMax,
+    sortBy,
+    onlyNewArrivals,
+  ]);
+
+  const selectedFilterCount =
+    selectedCategories.length +
+    selectedColors.length +
+    selectedSizes.length +
+    selectedBrands.length +
+    selectedGenders.length +
+    (onlyNewArrivals ? 1 : 0);
+
   // Reusable Filter Content
   const renderFilterContent = (isMobile: boolean = false) => (
     <>
@@ -134,18 +228,18 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
         </button>
       </div>
 
-      {/* 2. Categoría — checkbox list of the 6 categories */}
+      {/* 2. Categoría — checkbox list, fully dynamic from product_categories */}
       <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
         <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
           Categoría
         </span>
         <div className="space-y-2.5">
-          {CATEGORIES.map((cat) => {
-            const isChecked = selectedCategories.includes(cat.name);
+          {categories.map((cat) => {
+            const isChecked = selectedCategories.includes(cat.id);
             return (
               <label
                 key={cat.id}
-                onClick={() => toggleCategory(cat.name)}
+                onClick={() => toggleCategory(cat.id)}
                 className="flex items-start gap-2.5 text-xs text-[#16232F] hover:text-[#2C63AE] cursor-pointer select-none"
               >
                 <div
@@ -169,14 +263,14 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
         <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
           Color
         </span>
-        
+
         {/* Permanentes Sub-group */}
         <div className="mb-3">
           <span className="block text-[11px] font-medium text-[#5A6E85] mb-2">
             Permanentes
           </span>
           <div className="grid grid-cols-6 gap-2">
-            {PERMANENT_COLORS.map((color) => {
+            {permanentColors.map((color) => {
               const isSelected = selectedColors.includes(color.id);
               return (
                 <button
@@ -201,7 +295,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
             Edición limitada
           </span>
           <div className="grid grid-cols-6 gap-2">
-            {LIMITED_COLORS.map((color) => {
+            {limitedColors.map((color) => {
               const isSelected = selectedColors.includes(color.id);
               return (
                 <button
@@ -221,52 +315,52 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
         </div>
       </div>
 
-      {/* 4. Talla — wrapped chip buttons, XXS to 3XL */}
+      {/* 4. Talla — wrapped chip buttons, fully dynamic from sizes table */}
       <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
         <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
           Talla
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {SIZES.map((size) => {
-            const isSelected = selectedSizes.includes(size);
+          {sizes.map((size) => {
+            const isSelected = selectedSizes.includes(size.code);
             return (
               <button
-                key={size}
+                key={size.code}
                 type="button"
-                onClick={() => toggleSize(size)}
+                onClick={() => toggleSize(size.code)}
                 className={`px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border transition-colors cursor-pointer ${
                   isSelected
                     ? 'bg-[#2C63AE] text-[#FFFFFF] border-[#2C63AE]'
                     : 'bg-[#FFFFFF] text-[#16232F] border-[#DDE3EA] hover:border-[#16232F]/50'
                 }`}
               >
-                {size}
+                {size.code}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* 5. Marca — wrapped chip buttons */}
+      {/* 5. Marca — wrapped chip buttons, fully dynamic from brands table */}
       <div className="pb-4 mb-4 border-b border-[#EAEFF4]">
         <span className="block text-xs font-bold uppercase tracking-wider text-[#16232F] mb-3">
           Marca
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {BRANDS.map((brand) => {
-            const isSelected = selectedBrands.includes(brand);
+          {brands.map((brand) => {
+            const isSelected = selectedBrands.includes(brand.id);
             return (
               <button
-                key={brand}
+                key={brand.id}
                 type="button"
-                onClick={() => toggleBrand(brand)}
+                onClick={() => toggleBrand(brand.id)}
                 className={`px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border transition-colors cursor-pointer ${
                   isSelected
                     ? 'bg-[#2C63AE] text-[#FFFFFF] border-[#2C63AE]'
                     : 'bg-[#FFFFFF] text-[#16232F] border-[#DDE3EA] hover:border-[#16232F]/50'
                 }`}
               >
-                {brand}
+                {brand.name}
               </button>
             );
           })}
@@ -444,21 +538,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
               <span>Filtros</span>
             </span>
             <span className="text-xs text-[#5A6E85] font-normal">
-              {selectedCategories.length +
-                selectedColors.length +
-                selectedSizes.length +
-                selectedBrands.length +
-                selectedGenders.length +
-                (onlyNewArrivals ? 1 : 0) > 0
-                ? `${
-                    selectedCategories.length +
-                    selectedColors.length +
-                    selectedSizes.length +
-                    selectedBrands.length +
-                    selectedGenders.length +
-                    (onlyNewArrivals ? 1 : 0)
-                  } seleccionado(s)`
-                : 'Ver todos'}
+              {selectedFilterCount > 0 ? `${selectedFilterCount} seleccionado(s)` : 'Ver todos'}
             </span>
           </button>
         </div>
@@ -476,15 +556,32 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
 
           {/* 2. Right Column: Product Grid */}
           <div className="flex-1 min-w-0 w-full">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
-              {PRODUCTS.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onClick={() => onNavigate?.('pdp', product.id)}
-                />
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="aspect-[3/4] bg-[#F7F9FB] rounded-[4px] animate-pulse" />
+                ))}
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-16 sm:py-24">
+                <p className="text-sm font-semibold text-[#16232F] mb-1">
+                  No hay productos que coincidan con estos filtros.
+                </p>
+                <p className="text-xs text-[#5A6E85]">
+                  Intenta ajustar o limpiar los filtros seleccionados.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
+                {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onClick={() => onNavigate?.('pdp', product.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -528,5 +625,3 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
     </main>
   );
 };
-
-

@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Section } from './Section';
-import { Product, PRODUCTS } from '../data/products';
+import { Product, fetchProducts } from '../lib/products';
 
 export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> = ({
   product,
   onClick,
 }) => {
+  const mainImage = product.images[0]?.url;
+
   return (
     <div
       onClick={onClick}
@@ -14,12 +16,14 @@ export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> =
     >
       {/* 1. Large photo filling most of the card (~3:4 aspect ratio), full-bleed, no border/frame */}
       <div className="w-full aspect-[3/4] overflow-hidden bg-[#F7F9FB] rounded-[4px]">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
+        {mainImage && (
+          <img
+            src={mainImage}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        )}
       </div>
 
       {/* 2. Bottom row: product name on left, price in bold text on right (responsive for mobile 2-col & desktop) */}
@@ -27,17 +31,30 @@ export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> =
         <span className="text-[14px] sm:text-[18px] md:text-[20px] line-clamp-2 sm:line-clamp-1 group-hover:underline">
           {product.name}
         </span>
-        <span className="text-[15px] sm:text-[20px] md:text-[24px] shrink-0">
-          {product.price}
+        <span className="flex items-baseline gap-1.5 shrink-0">
+          {product.hasDiscount && (
+            <span className="text-[12px] sm:text-[14px] font-medium text-[#5A6E85] line-through">
+              ${product.price.toFixed(2)}
+            </span>
+          )}
+          <span className="text-[15px] sm:text-[20px] md:text-[24px]">
+            ${product.finalPrice.toFixed(2)}
+          </span>
         </span>
       </div>
 
-      {/* 3. Three small solid-color circular dots (red, blue, green) — decorative only */}
-      <div className="flex items-center gap-1.5 sm:gap-2 mt-2 sm:mt-2.5" aria-hidden="true">
-        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#E53E3E] inline-block" />
-        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#3182CE] inline-block" />
-        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#38A169] inline-block" />
-      </div>
+      {/* 3. Color swatch dots reflecting this product's real available colors */}
+      {product.colors.length > 0 && (
+        <div className="flex items-center gap-1.5 sm:gap-2 mt-2 sm:mt-2.5" aria-hidden="true">
+          {product.colors.slice(0, 3).map((color) => (
+            <span
+              key={color.id}
+              className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full inline-block border border-black/10"
+              style={{ backgroundColor: color.hex }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -47,20 +64,34 @@ interface BestSellersSectionProps {
 }
 
 export const BestSellersSection: React.FC<BestSellersSectionProps> = ({ onNavigate }) => {
-  const totalCount = PRODUCTS.length; // 6 products
-  // 5 clone sets provide an extensive buffer so fast consecutive clicks never run out of room
-  const extendedProducts = [
-    ...PRODUCTS,
-    ...PRODUCTS,
-    ...PRODUCTS,
-    ...PRODUCTS,
-    ...PRODUCTS,
-  ];
-  const middleSetStart = totalCount * 2; // index 12 (start of middle 3rd set)
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const [currentIndex, setCurrentIndex] = useState<number>(middleSetStart);
+  useEffect(() => {
+    fetchProducts()
+      .then(setProducts)
+      .catch(() => setProducts([]))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  // "Best Sellers" placeholder logic: no sales/order-count data is wired up yet,
+  // so this section shows the newest-created products until real bestseller
+  // tracking exists. fetchProducts() already orders by created_at desc.
+  const totalCount = products.length;
+  // 5 clone sets provide an extensive buffer so fast consecutive clicks never run out of room
+  const extendedProducts =
+    totalCount > 0 ? [...products, ...products, ...products, ...products, ...products] : [];
+  const middleSetStart = totalCount * 2; // start of the middle 3rd clone set
+
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(true);
   const isAnimatingRef = useRef<boolean>(false);
+
+  // Re-center the carousel once real product count is known (data loads async)
+  useEffect(() => {
+    setIsTransitioning(false);
+    setCurrentIndex(middleSetStart);
+  }, [totalCount]);
 
   // TransitionEnd handles smooth seamless teleporting into the middle clone set
   const handleTransitionEnd = useCallback(() => {
@@ -105,6 +136,22 @@ export const BestSellersSection: React.FC<BestSellersSectionProps> = ({ onNaviga
     setIsTransitioning(true);
     setCurrentIndex((prev) => prev - 1);
   }, []);
+
+  if (isLoading) {
+    return (
+      <Section id="best-sellers" density="default" bg="white" title="Best Sellers">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="aspect-[3/4] bg-[#F7F9FB] rounded-[4px] animate-pulse" />
+          ))}
+        </div>
+      </Section>
+    );
+  }
+
+  if (totalCount === 0) {
+    return null;
+  }
 
   return (
     <Section
@@ -166,7 +213,7 @@ export const BestSellersSection: React.FC<BestSellersSectionProps> = ({ onNaviga
 
         {/* Mobile Horizontal Scroll (below md:) - 2 cards per view (side by side) with scroll-snap */}
         <div className="md:hidden flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none -mx-4 px-4 sm:-mx-6 sm:px-6">
-          {PRODUCTS.map((product) => (
+          {products.map((product) => (
             <div
               key={product.id}
               className="w-[calc(50%-6px)] sm:w-[calc(50%-8px)] snap-start shrink-0"
