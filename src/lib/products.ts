@@ -61,6 +61,9 @@ export interface Size {
   sortOrder: number;
 }
 
+// Canonical size display order (mirrors the DB "sizes" table sort_order).
+export const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+
 // "Nuevos Ingresos" has no dedicated flag in the schema — placeholder rule
 // (owner-confirmed default): products created within this many days count as new.
 const NEW_ARRIVALS_WINDOW_DAYS = 30;

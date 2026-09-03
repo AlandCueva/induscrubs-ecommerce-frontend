@@ -3,8 +3,6 @@ import React from 'react';
 interface LogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  variant?: 'light' | 'dark' | 'brand';
-  showSubtitle?: boolean;
 }
 
 export const Logo: React.FC<LogoProps> = ({

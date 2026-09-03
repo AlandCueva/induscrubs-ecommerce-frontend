@@ -1,8 +1,0 @@
-{
-  "name": "Induscrubs",
-  "description": "Tienda online oficial de INDUSCRUBS - Indumentaria médica ecuatoriana de alta calidad confeccionada en Loja desde 2013.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

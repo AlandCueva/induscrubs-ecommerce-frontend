@@ -14,7 +14,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 pb-12 border-b border-[#DDE3EA]">
           {/* Brand Col (4 cols) */}
           <div className="lg:col-span-4 space-y-4">
-            <Logo variant="dark" size="md" />
+            <Logo size="md" />
             <p className="text-xs text-[#16232F]/80 leading-relaxed max-w-[320px]">
               Indumentaria médica ecuatoriana diseñada y confeccionada en Loja desde 2013.
               Tecnología antifluido, elasticidad de cuatro vías y durabilidad hospitalaria probada.

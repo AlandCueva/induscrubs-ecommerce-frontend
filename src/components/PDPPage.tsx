@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Minus, Plus } from 'lucide-react';
-import { Product, fetchProductById, fetchRecommendedProducts, getDiscountBadgeLabel } from '../lib/products';
+import {
+  Product,
+  fetchProductById,
+  fetchRecommendedProducts,
+  getDiscountBadgeLabel,
+  SIZE_ORDER,
+} from '../lib/products';
 import { ProductCard } from './BestSellersSection';
 import { Section } from './Section';
 import { FavoriteButton } from './FavoriteButton';
-
-// Canonical size display order (mirrors the DB "sizes" table sort_order).
-const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
 interface PDPPageProps {
   productId?: string;

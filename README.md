@@ -1,20 +1,20 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# INDUSCRUBS Ecommerce Frontend
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/2be7a7db-2286-4c9b-82ee-ea3b3934c550
+Storefront for INDUSCRUBS — Ecuadorian medical apparel handmade in Loja since 2013. Built with React 19, Vite, TypeScript, and Tailwind CSS v4, with product data and orders backed by Supabase.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy `.env.example` to `.env` and fill in the Supabase project values.
 3. Run the app:
    `npm run dev`
+
+## Scripts
+
+- `npm run dev` — start the Vite dev server
+- `npm run build` — production build to `dist/`
+- `npm run preview` — preview the production build locally
+- `npm run lint` — type-check with `tsc --noEmit`

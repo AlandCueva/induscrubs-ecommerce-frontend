@@ -164,8 +164,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
     setReceiptFile(file);
   };
 
-  const handleSubmitOrder = async (method: PaymentMethod) => {
-    if (method === 'PayPhone') return; // never reachable — button stays disabled
+  const handleSubmitOrder = async (method: 'Transferencia' | 'Efectivo') => {
     if (!isDetailsValid || isSubmitting) return;
 
     setIsSubmitting(true);

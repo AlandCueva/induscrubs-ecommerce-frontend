@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { FavoriteButton } from './FavoriteButton';
+import { SIZE_ORDER as SIZES } from '../lib/products';
 
 const START_FRAME = 40;
 const END_FRAME = 96;
@@ -10,8 +11,6 @@ const BASE_URL = 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/scrollsectioneffec
 // no product lookup), it just never appears in the Favoritos list since that
 // page filters against live product data (existing "skip stale ids" rule).
 const PRODUCT_ID = 'greys-anatomy-scrub-set-negro';
-
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
 const COLOR_VARIANTS = [
   {
