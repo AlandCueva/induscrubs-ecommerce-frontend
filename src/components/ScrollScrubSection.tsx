@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { FavoriteButton } from './FavoriteButton';
 
 const START_FRAME = 40;
 const END_FRAME = 96;
 const TOTAL_FRAMES = END_FRAME - START_FRAME + 1; // 57 frames
 const BASE_URL = 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/scrollsectioneffect/scrub916_';
+// Not a real row in `products` — favoriting it is still allowed (frontend-only,
+// no product lookup), it just never appears in the Favoritos list since that
+// page filters against live product data (existing "skip stale ids" rule).
+const PRODUCT_ID = 'greys-anatomy-scrub-set-negro';
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
@@ -28,11 +33,7 @@ const FRAME_URLS = Array.from({ length: TOTAL_FRAMES }, (_, i) => {
   return `${BASE_URL}${frameNum}.webp`;
 });
 
-interface ScrollScrubSectionProps {
-  onAddToCart?: (item: { productId: string; name: string; size: string; price: number; image?: string }) => void;
-}
-
-export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToCart }) => {
+export const ScrollScrubSection: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const shirtCalloutRef = useRef<HTMLDivElement>(null);
@@ -46,16 +47,6 @@ export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToC
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [selectedSize, setSelectedSize] = useState<string>('M');
-
-  const handleBuyNow = () => {
-    onAddToCart?.({
-      productId: 'greys-anatomy-scrub-set-negro',
-      name: "Grey's Anatomy Scrub Set Negro",
-      size: selectedSize,
-      price: 65,
-      image: 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/sketchersblack.webp',
-    });
-  };
 
   // 1. Preload all 105 frames into memory (040 through 144)
   useEffect(() => {
@@ -367,9 +358,12 @@ export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToC
         {/* Product Ficha Content (Reflowed to a single mobile column) */}
         <div className="max-w-md mx-auto px-5 sm:px-6 relative z-20 -mt-6">
           {/* Eyebrow Label */}
-          <span className="block text-xs font-semibold uppercase tracking-wider text-[#2C63AE] mb-1.5">
-            Nuestro Best Seller
-          </span>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#2C63AE]">
+              Nuestro Best Seller
+            </span>
+            <FavoriteButton productId={PRODUCT_ID} />
+          </div>
 
           {/* Heading */}
           <h2
@@ -422,12 +416,11 @@ export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToC
             </div>
           </div>
 
-          {/* CTA Button */}
+          {/* CTA Button — visual only; product is not real inventory yet, so no cart action is wired */}
           <button
             type="button"
-            onClick={handleBuyNow}
             className="w-full h-12 bg-[#2C63AE] hover:bg-[#245292] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center min-h-[48px] shadow-sm cursor-pointer mb-6"
-            aria-label="Comprar Grey's Anatomy Scrub Set Negro"
+            aria-label="Grey's Anatomy Scrub Set Negro"
           >
             COMPRAR AHORA
           </button>
@@ -472,9 +465,12 @@ export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToC
           {/* a. LEFT column: Persistent Product Info Panel (Expanded width for generous breathing room) */}
           <div className="w-[420px] md:w-[460px] lg:w-[540px] xl:w-[580px] flex-shrink-0 flex flex-col justify-center py-6 select-none z-20">
             {/* Eyebrow Label */}
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#2C63AE] mb-2">
-              Nuestro Best Seller
-            </span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#2C63AE]">
+                Nuestro Best Seller
+              </span>
+              <FavoriteButton productId={PRODUCT_ID} />
+            </div>
 
             {/* Locked Typography Heading */}
             <h2
@@ -525,12 +521,11 @@ export const ScrollScrubSection: React.FC<ScrollScrubSectionProps> = ({ onAddToC
               </div>
             </div>
 
-            {/* CTA Button */}
+            {/* CTA Button — visual only; product is not real inventory yet, so no cart action is wired */}
             <button
               type="button"
-              onClick={handleBuyNow}
               className="w-full h-12 bg-[#2C63AE] hover:bg-[#245292] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center min-h-[48px] shadow-sm cursor-pointer mb-6"
-              aria-label="Comprar Grey's Anatomy Scrub Set Negro"
+              aria-label="Grey's Anatomy Scrub Set Negro"
             >
               COMPRAR AHORA
             </button>

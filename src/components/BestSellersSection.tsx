@@ -1,34 +1,66 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Section } from './Section';
-import { Product, fetchProducts } from '../lib/products';
+import { FavoriteButton } from './FavoriteButton';
+import { Product, fetchProducts, getDiscountBadgeLabel } from '../lib/products';
 
 export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> = ({
   product,
   onClick,
 }) => {
-  const mainImage = product.images[0]?.url;
+  const mainImage = product.images[0];
+  // Hover-swap target: the second photo within the same color group as the
+  // card's main image, in existing product_images sort_order. Groups with
+  // only one image simply have no hover target, so hovering is a no-op.
+  const hoverImage = product.images.filter((img) => img.colorId === mainImage?.colorId)[1];
+  const discountBadge = getDiscountBadgeLabel(product);
+
+  // Title underline is driven by a real mouseenter/mouseleave DOM event into
+  // React state, not a CSS `:hover`/`group-hover` variant — this was rebuilt
+  // after the CSS-variant approach proved unreliable to verify in practice
+  // (see prior investigation), so the effect no longer depends on a specific
+  // generated Tailwind utility rule actually being present in the delivered
+  // CSS at any given moment.
+  const [isTitleHovered, setIsTitleHovered] = useState(false);
 
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setIsTitleHovered(true)}
+      onMouseLeave={() => setIsTitleHovered(false)}
       className={`group flex flex-col w-full select-none ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
     >
       {/* 1. Large photo filling most of the card (~3:4 aspect ratio), full-bleed, no border/frame */}
-      <div className="w-full aspect-[3/4] overflow-hidden bg-[#F7F9FB] rounded-[4px]">
+      <div className="relative w-full aspect-[3/4] overflow-hidden bg-[#F7F9FB] rounded-[4px]">
         {mainImage && (
           <img
-            src={mainImage}
+            src={mainImage.url}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover ${hoverImage ? 'transition-opacity duration-300' : ''}`}
             loading="lazy"
           />
         )}
+        {hoverImage && (
+          <img
+            src={hoverImage.url}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            loading="lazy"
+          />
+        )}
+        {discountBadge && (
+          <span className="absolute top-2 left-2 z-10 px-2.5 py-1.5 rounded-[4px] bg-[#16232F] text-[#FFFFFF] text-[13px] sm:text-[15px] font-bold tracking-wide">
+            {discountBadge}
+          </span>
+        )}
+        <FavoriteButton productId={product.id} className="absolute top-2 right-2 z-10" />
       </div>
 
       {/* 2. Bottom row: product name on left, price in bold text on right (responsive for mobile 2-col & desktop) */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-3 mt-2.5 sm:mt-4 text-[#16232F] font-bold leading-[105%] tracking-[-0.02em]">
-        <span className="text-[14px] sm:text-[18px] md:text-[20px] line-clamp-2 sm:line-clamp-1 group-hover:underline">
+      {/* No truncation: full product name always shows, wrapping to as many lines as it needs. */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-3 mt-2.5 sm:mt-4 text-[#16232F] font-bold leading-[105%] tracking-[-0.02em]">
+        <span className={`text-[14px] sm:text-[18px] md:text-[20px] ${isTitleHovered ? 'underline' : ''}`}>
           {product.name}
         </span>
         <span className="flex items-baseline gap-1.5 shrink-0">

@@ -65,6 +65,23 @@ export interface Size {
 // (owner-confirmed default): products created within this many days count as new.
 const NEW_ARRIVALS_WINDOW_DAYS = 30;
 
+// Discount indicator label for product cards/PDP. The DB's generated
+// `final_price` column only factors in `discount_amount` (has_discount &&
+// discount_amount != null), so that pair is the real source of truth for
+// "is a discount active." `discount_percent` exists as a separate stored
+// column the admin fills in alongside it — we prefer it for the label text
+// since it reflects the admin's stated intent, falling back to deriving the
+// percent from price/finalPrice only if it wasn't populated.
+export function getDiscountBadgeLabel(product: Product): string | null {
+  if (!product.hasDiscount || product.finalPrice >= product.price) return null;
+  const percent =
+    product.discountPercent != null
+      ? Math.round(product.discountPercent)
+      : Math.round((1 - product.finalPrice / product.price) * 100);
+  if (percent <= 0) return null;
+  return `-${percent}%`;
+}
+
 export function isNewArrival(createdAt: string): boolean {
   const createdMs = new Date(createdAt).getTime();
   const diffDays = (Date.now() - createdMs) / (1000 * 60 * 60 * 24);
@@ -174,6 +191,35 @@ export async function searchProducts(query: string): Promise<Product[]> {
 
   if (error) throw error;
   return (data as unknown as RawProductRow[]).map(mapRow);
+}
+
+// "Productos recomendados" (PDP) default rule: same price band as the
+// current product, ±20% of its final (effective) price, inclusive. Nearest
+// price first, newest first as the tiebreak. Owner can override the band.
+const RECOMMENDED_PRICE_BAND = 0.2;
+const RECOMMENDED_LIMIT = 10;
+
+export async function fetchRecommendedProducts(
+  product: Product,
+  limit: number = RECOMMENDED_LIMIT
+): Promise<Product[]> {
+  const low = product.finalPrice * (1 - RECOMMENDED_PRICE_BAND);
+  const high = product.finalPrice * (1 + RECOMMENDED_PRICE_BAND);
+
+  const { data, error } = await supabase
+    .from('products')
+    .select(PRODUCT_SELECT)
+    .neq('id', product.id)
+    .gte('final_price', low)
+    .lte('final_price', high)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data as unknown as RawProductRow[])
+    .map(mapRow)
+    .sort((a, b) => Math.abs(a.finalPrice - product.finalPrice) - Math.abs(b.finalPrice - product.finalPrice))
+    .slice(0, limit);
 }
 
 export async function fetchCategories(): Promise<Category[]> {

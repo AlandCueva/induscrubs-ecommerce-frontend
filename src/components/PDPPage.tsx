@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { Product, fetchProductById } from '../lib/products';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowLeft, Minus, Plus } from 'lucide-react';
+import { Product, fetchProductById, fetchRecommendedProducts, getDiscountBadgeLabel } from '../lib/products';
+import { ProductCard } from './BestSellersSection';
+import { Section } from './Section';
+import { FavoriteButton } from './FavoriteButton';
 
 // Canonical size display order (mirrors the DB "sizes" table sort_order).
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -15,6 +18,7 @@ interface PDPPageProps {
     price: number;
     image?: string;
     colorId?: string;
+    qty: number;
   }) => void;
 }
 
@@ -24,6 +28,33 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
   const [selectedColorId, setSelectedColorId] = useState<string | undefined>();
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
+  const [isLoadingRecommended, setIsLoadingRecommended] = useState<boolean>(false);
+
+  // Hover-zoom lens (desktop only, additive on top of the existing gallery).
+  const ZOOM_FACTOR = 2.5;
+  const LENS_SIZE = 160;
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const [isZooming, setIsZooming] = useState(false);
+  const [lensRect, setLensRect] = useState({ left: 0, top: 0, bgPosX: 0, bgPosY: 0, bgWidth: 0, bgHeight: 0 });
+
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = imageContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cursorX = e.clientX - rect.left;
+    const cursorY = e.clientY - rect.top;
+    const lensLeft = Math.min(Math.max(cursorX - LENS_SIZE / 2, 0), Math.max(rect.width - LENS_SIZE, 0));
+    const lensTop = Math.min(Math.max(cursorY - LENS_SIZE / 2, 0), Math.max(rect.height - LENS_SIZE, 0));
+    setLensRect({
+      left: lensLeft,
+      top: lensTop,
+      bgPosX: LENS_SIZE / 2 - (lensLeft + LENS_SIZE / 2) * ZOOM_FACTOR,
+      bgPosY: LENS_SIZE / 2 - (lensTop + LENS_SIZE / 2) * ZOOM_FACTOR,
+      bgWidth: rect.width * ZOOM_FACTOR,
+      bgHeight: rect.height * ZOOM_FACTOR,
+    });
+  };
 
   useEffect(() => {
     if (!productId) {
@@ -45,6 +76,30 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
       .catch(() => setProduct(null))
       .finally(() => setIsLoading(false));
   }, [productId]);
+
+  // Recommendations re-derive whenever the viewed product changes (same price
+  // band as the product currently on screen).
+  useEffect(() => {
+    if (!product) {
+      setRecommendedProducts([]);
+      return;
+    }
+    let isCancelled = false;
+    setIsLoadingRecommended(true);
+    fetchRecommendedProducts(product)
+      .then((data) => {
+        if (!isCancelled) setRecommendedProducts(data);
+      })
+      .catch(() => {
+        if (!isCancelled) setRecommendedProducts([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsLoadingRecommended(false);
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [product?.id]);
 
   const sortedSizeCodes = useMemo(
     () => (product ? [...product.sizeCodes].sort((a, b) => SIZE_ORDER.indexOf(a) - SIZE_ORDER.indexOf(b)) : []),
@@ -68,11 +123,26 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
     product?.variants.find((v) => v.sizeCode === sizeCode && v.colorId === selectedColorId);
 
   const activeVariant = variantFor(selectedSize);
+  const maxQty = activeVariant?.stock ?? 0;
   const canBuy = Boolean(activeVariant && activeVariant.stock > 0);
+
+  // Re-derive the quantity ceiling every time the selected size/color combo
+  // changes, since each variant carries its own live stock count.
+  useEffect(() => {
+    setQuantity((prev) => (maxQty > 0 ? Math.min(Math.max(prev, 1), maxQty) : 1));
+  }, [selectedSize, selectedColorId, maxQty]);
 
   const handleSelectColor = (colorId: string) => {
     setSelectedColorId(colorId);
     setActiveImageIndex(0);
+  };
+
+  const handleDecrementQty = () => setQuantity((q) => Math.max(1, q - 1));
+  const handleIncrementQty = () => setQuantity((q) => Math.min(maxQty, q + 1));
+  const handleQuantityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const parsed = parseInt(e.target.value, 10);
+    if (Number.isNaN(parsed)) return;
+    setQuantity(Math.min(Math.max(parsed, 1), Math.max(maxQty, 1)));
   };
 
   const handleBuyNow = () => {
@@ -84,6 +154,7 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
       price: product.finalPrice,
       image: activeImage?.url,
       colorId: selectedColorId,
+      qty: quantity,
     });
   };
 
@@ -122,6 +193,8 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
     );
   }
 
+  const discountBadge = getDiscountBadgeLabel(product);
+
   return (
     <main id="pdp-content" className="w-full bg-[#FFFFFF] py-6 sm:py-10 md:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -139,13 +212,42 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-start">
           {/* Left Column: Product Image Gallery */}
           <div className="lg:col-span-6 xl:col-span-7">
-            <div className="relative w-full aspect-[3/4] sm:aspect-[4/5] bg-[#F7F9FB] rounded-[8px] overflow-hidden border border-[#DDE3EA]/60 shadow-sm">
+            <div
+              ref={imageContainerRef}
+              onMouseEnter={() => setIsZooming(true)}
+              onMouseLeave={() => setIsZooming(false)}
+              onMouseMove={handleImageMouseMove}
+              className="relative w-full lg:max-w-[420px] xl:max-w-[460px] aspect-[3/4] sm:aspect-[4/5] bg-[#F7F9FB] rounded-[8px] overflow-hidden border border-[#DDE3EA]/60 shadow-sm lg:cursor-zoom-in"
+            >
               {activeImage && (
                 <img
                   src={activeImage.url}
                   alt={product.name}
                   className="w-full h-full object-cover object-center"
                   loading="eager"
+                />
+              )}
+              {discountBadge && (
+                <span className="absolute top-3 left-3 z-10 px-3 py-2 rounded-[4px] bg-[#16232F] text-[#FFFFFF] text-[17px] sm:text-[19px] font-bold tracking-wide">
+                  {discountBadge}
+                </span>
+              )}
+              <FavoriteButton productId={product.id} size="md" className="absolute top-3 right-3 z-10" />
+              {/* Hover-zoom lens: desktop only, additive on top of the existing gallery/color-swap image */}
+              {isZooming && activeImage && (
+                <div
+                  aria-hidden="true"
+                  className="hidden lg:block absolute z-20 rounded-[4px] border-2 border-[#FFFFFF] shadow-lg pointer-events-none"
+                  style={{
+                    left: lensRect.left,
+                    top: lensRect.top,
+                    width: LENS_SIZE,
+                    height: LENS_SIZE,
+                    backgroundImage: `url(${activeImage.url})`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: `${lensRect.bgWidth}px ${lensRect.bgHeight}px`,
+                    backgroundPosition: `${lensRect.bgPosX}px ${lensRect.bgPosY}px`,
+                  }}
                 />
               )}
             </div>
@@ -272,6 +374,59 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
               </div>
             </div>
 
+            {/* Quantity Stepper */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between text-xs font-semibold text-[#16232F] mb-2.5">
+                <span>Cantidad</span>
+                {canBuy && (
+                  <span className="text-[#5A6E85] font-medium">{maxQty} disponibles</span>
+                )}
+              </div>
+              <div
+                className={`inline-flex items-center border rounded-[6px] overflow-hidden ${
+                  canBuy ? 'border-[#DDE3EA]' : 'border-[#EAEFF4]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={handleDecrementQty}
+                  disabled={!canBuy || quantity <= 1}
+                  className={`w-10 h-10 flex items-center justify-center transition-colors ${
+                    !canBuy || quantity <= 1
+                      ? 'text-[#B8C2CC] cursor-not-allowed'
+                      : 'text-[#16232F] hover:bg-[#F7F9FB] cursor-pointer'
+                  }`}
+                  aria-label="Disminuir cantidad"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={Math.max(maxQty, 1)}
+                  value={quantity}
+                  disabled={!canBuy}
+                  onChange={handleQuantityInputChange}
+                  className="w-12 h-10 text-center text-sm font-semibold text-[#16232F] border-x border-[#DDE3EA] focus:outline-none disabled:bg-[#F7F9FB] disabled:text-[#B8C2CC] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  aria-label="Cantidad"
+                />
+                <button
+                  type="button"
+                  onClick={handleIncrementQty}
+                  disabled={!canBuy || quantity >= maxQty}
+                  className={`w-10 h-10 flex items-center justify-center transition-colors ${
+                    !canBuy || quantity >= maxQty
+                      ? 'text-[#B8C2CC] cursor-not-allowed'
+                      : 'text-[#16232F] hover:bg-[#F7F9FB] cursor-pointer'
+                  }`}
+                  aria-label="Aumentar cantidad"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
             {/* Buy Now CTA Button */}
             <button
               type="button"
@@ -287,6 +442,29 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
           </div>
         </div>
       </div>
+
+      {/* Productos recomendados: same price band as the current product */}
+      {(isLoadingRecommended || recommendedProducts.length > 0) && (
+        <Section id="productos-recomendados" density="default" bg="tint-2" title="Productos recomendados">
+          {isLoadingRecommended ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="aspect-[3/4] bg-[#FFFFFF] rounded-[4px] animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-4 sm:gap-x-6 gap-y-8 sm:gap-y-12">
+              {recommendedProducts.map((recommended) => (
+                <ProductCard
+                  key={recommended.id}
+                  product={recommended}
+                  onClick={() => onNavigate?.('pdp', recommended.id)}
+                />
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
     </main>
   );
 };

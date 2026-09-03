@@ -223,7 +223,8 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
                     return (
                       <div
                         key={idx}
-                        className="h-full aspect-[3/4] shrink-0 relative rounded-[6px] overflow-hidden bg-[#FFFFFF]"
+                        onClick={() => handleColorClick(extended.realIdx)}
+                        className="h-full aspect-[3/4] shrink-0 relative rounded-[6px] overflow-hidden bg-[#FFFFFF] cursor-pointer"
                       >
                         <img
                           src={extended.tile.imageUrl}

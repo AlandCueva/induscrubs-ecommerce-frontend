@@ -1,14 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { STORE_INFO } from '../data/products';
-import { ShoppingBag, Search, Menu, X, MessageCircle, MapPin, User } from 'lucide-react';
+import { ShoppingBag, Search, Menu, X, MessageCircle, MapPin, Heart } from 'lucide-react';
+import { useFavoriteIds } from '../lib/favorites';
 
 interface HeaderProps {
   currentView: string;
-  onNavigate: (view: 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b', extra?: any) => void;
+  onNavigate: (view: 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites', extra?: any) => void;
   cartCount: number;
   onOpenCart: () => void;
   onOpenSearch: () => void;
 }
+
+type NavLink = {
+  label: string;
+  targetId?: string;
+  action?: () => void;
+};
 
 export const Header: React.FC<HeaderProps> = ({
   currentView,
@@ -25,8 +32,9 @@ export const Header: React.FC<HeaderProps> = ({
   const announcementRef = useRef<HTMLDivElement>(null);
 
   const [scrollY, setScrollY] = useState(0);
+  const favoritesCount = useFavoriteIds().length;
 
-  const handleNavLinkClick = (link: { label: string; targetId?: string; action?: () => void }) => {
+  const handleNavLinkClick = (link: NavLink) => {
     if (link.action) {
       link.action();
       return;
@@ -49,10 +57,10 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  // Nav links: Women, Men, Scrubs, Marcas, Colección, Locaciones
-  const navLinks = [
-    { label: 'Women' },
-    { label: 'Men' },
+  // Nav links: Mujer, Hombre, Scrubs, Marcas, Colección, Locaciones
+  const navLinks: NavLink[] = [
+    { label: 'Mujer', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Mujer' }) },
+    { label: 'Hombre', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Hombre' }) },
     { label: 'Scrubs', targetId: 'best-sellers' },
     { label: 'Marcas', targetId: 'best-sellers' },
     { label: 'Colección', action: () => onNavigate('catalog') },
@@ -292,14 +300,19 @@ export const Header: React.FC<HeaderProps> = ({
                   <MessageCircle className="w-5 h-5" />
                 </a>
 
-                {/* Log in Visual-Only Control — Clean icon + text, no box/border */}
+                {/* Favoritos Trigger — Clean icon with notification counter, no box/border */}
                 <button
                   type="button"
-                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-11 min-h-[44px] text-[#FFFFFF] hover:opacity-80 transition-opacity duration-[250ms] font-medium text-xs sm:text-sm hover:underline hover:font-bold"
-                  aria-label="Iniciar sesión"
+                  onClick={() => onNavigate('favorites')}
+                  className="relative flex items-center justify-center w-11 h-11 min-h-[44px] text-[#FFFFFF] hover:opacity-80 transition-opacity duration-[250ms]"
+                  aria-label={`Favoritos (${favoritesCount} productos)`}
                 >
-                  <User className="w-4 h-4" />
-                  <span>Log in</span>
+                  <Heart className="w-5 h-5" />
+                  {favoritesCount > 0 && (
+                    <span className="absolute top-1 right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#2C63AE] text-[#FFFFFF] text-[10px] font-bold rounded-full pointer-events-none">
+                      {favoritesCount}
+                    </span>
+                  )}
                 </button>
 
                 {/* Cart Trigger — Clean icon with notification counter, no box/border */}
@@ -348,18 +361,6 @@ export const Header: React.FC<HeaderProps> = ({
                     {link.label}
                   </button>
                 ))}
-
-                {/* Mobile Log in button */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-left px-4 py-3 text-base font-medium text-[#16232F] hover:bg-[#F2F7FF] hover:text-[#2C63AE] hover:underline hover:font-bold rounded-[6px] border border-[#DDE3EA] min-h-[44px] flex items-center gap-2"
-                  >
-                    <User className="w-5 h-5 text-[#2C63AE]" />
-                    <span>Log in</span>
-                  </button>
-                </div>
 
                 <div className="pt-4 mt-2 border-t border-[#DDE3EA] flex flex-col items-center gap-3">
                   <div className="flex items-center justify-between w-full">

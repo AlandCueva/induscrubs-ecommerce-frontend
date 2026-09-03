@@ -16,9 +16,10 @@ import { PDPPage } from './components/PDPPage';
 import { CheckoutPage } from './components/CheckoutPage';
 import { CartDrawer } from './components/CartDrawer';
 import { SearchOverlay } from './components/SearchOverlay';
+import { FavoritesPage } from './components/FavoritesPage';
 import { CartItem } from './types';
 
-type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b';
+type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('home');
@@ -36,7 +37,9 @@ export default function App() {
     price: number;
     image?: string;
     colorId?: string;
+    qty?: number;
   }) => {
+    const addQty = item.qty && item.qty > 0 ? item.qty : 1;
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (i) =>
@@ -48,7 +51,7 @@ export default function App() {
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          qty: updated[existingIndex].qty + 1,
+          qty: updated[existingIndex].qty + addQty,
         };
         return updated;
       }
@@ -59,7 +62,7 @@ export default function App() {
         size: item.size,
         colorId: item.colorId,
         price: item.price,
-        qty: 1,
+        qty: addQty,
         image: item.image,
       };
       return [...prev, newItem];
@@ -148,7 +151,7 @@ export default function App() {
             <MarqueeSection />
 
             {/* 6. Scroll Scrub (Negro) Interactive Animation */}
-            <ScrollScrubSection onAddToCart={handleAddToCart} />
+            <ScrollScrubSection />
 
             {/* 7. Compra por Categoría (2x2 Grid) */}
             <CategoryGridSection onNavigate={handleNavigate} />
@@ -186,6 +189,8 @@ export default function App() {
             onClearCart={handleClearCart}
           />
         )}
+
+        {currentView === 'favorites' && <FavoritesPage onNavigate={handleNavigate} />}
       </div>
 
       {/* Global Footer (Instagram ONLY — no email, no Facebook) */}
