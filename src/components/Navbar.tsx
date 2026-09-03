@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
     { label: 'Mujer', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Mujer' }) },
     { label: 'Hombre', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Hombre' }) },
     { label: 'Scrubs', targetId: 'best-sellers' },
-    { label: 'Marcas', targetId: 'best-sellers' },
+    { label: 'Marcas', targetId: 'nuestras-marcas' },
     { label: 'Colección', action: () => onNavigate('catalog') },
     { label: 'Locaciones', targetId: 'ubicacion' },
   ];

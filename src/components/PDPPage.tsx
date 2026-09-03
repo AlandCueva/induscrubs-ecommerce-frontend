@@ -62,9 +62,11 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
       setIsLoading(false);
       return;
     }
+    let isCancelled = false;
     setIsLoading(true);
     fetchProductById(productId)
       .then((data) => {
+        if (isCancelled) return;
         setProduct(data);
         setSelectedColorId(data?.colors[0]?.id);
         const sortedSizes = data
@@ -73,8 +75,15 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
         setSelectedSize(sortedSizes[0] ?? '');
         setActiveImageIndex(0);
       })
-      .catch(() => setProduct(null))
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!isCancelled) setProduct(null);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsLoading(false);
+      });
+    return () => {
+      isCancelled = true;
+    };
   }, [productId]);
 
   // Recommendations re-derive whenever the viewed product changes (same price

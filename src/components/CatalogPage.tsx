@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Check, SlidersHorizontal, X } from 'lucide-react';
 import {
   Product,
@@ -87,7 +87,29 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
   // Pre-select filters based on initialFilter prop — re-runs once the matching
   // live list (categories/colors/brands) has finished loading, since navigation
   // can arrive before the fetch that resolves names/ids to filter against.
+  // Each distinct initialFilter reference represents a fresh navigation intent
+  // (e.g. clicking "Hombre" in the navbar while already on the catalog page),
+  // so it clears any previously/manually selected filters first instead of
+  // merging into them — otherwise leftover filters from an earlier visit could
+  // silently combine with the new one and hide products the user expects to see.
+  const prevInitialFilterRef = useRef<CatalogPageProps['initialFilter']>(undefined);
+
   useEffect(() => {
+    const isNewNavigation = prevInitialFilterRef.current !== initialFilter;
+    prevInitialFilterRef.current = initialFilter;
+
+    if (isNewNavigation) {
+      setSelectedCategories([]);
+      setSelectedColors([]);
+      setSelectedSizes([]);
+      setSelectedBrands([]);
+      setSelectedGenders([]);
+      setPriceMin('');
+      setPriceMax('');
+      setSortBy('Relevancia');
+      setOnlyNewArrivals(false);
+    }
+
     if (!initialFilter) return;
 
     if (initialFilter.filterType === 'brand' && initialFilter.value) {

@@ -75,6 +75,9 @@ const BANKS: BankOption[] = [
 ];
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+// Accepts formatting characters (spaces, dashes, parens, leading +) but requires
+// a plausible number of actual digits, so a stray character can't pass as a phone number.
+const MIN_PHONE_DIGITS = 7;
 
 type PaymentMethod = 'Transferencia' | 'PayPhone' | 'Efectivo';
 type DeliveryType = 'Domicilio' | 'Retiro en tienda';
@@ -116,7 +119,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
 
   const isContactValid =
     customerName.trim().length > 0 &&
-    customerPhone.trim().length > 0 &&
+    (customerPhone.match(/\d/g)?.length ?? 0) >= MIN_PHONE_DIGITS &&
     EMAIL_RE.test(customerEmail.trim());
 
   const isDeliveryValid =
