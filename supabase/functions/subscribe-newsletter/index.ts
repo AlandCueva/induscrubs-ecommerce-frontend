@@ -4,12 +4,46 @@ const BREVO_LISTS_URL = "https://api.brevo.com/v3/contacts/lists?limit=50&offset
 const BREVO_ATTRIBUTES_URL = "https://api.brevo.com/v3/contacts/attributes";
 const BREVO_CONTACTS_URL = "https://api.brevo.com/v3/contacts";
 
-// Preference order for the contact attribute that holds the subscriber's
-// name. We only ever use one that actually exists in the Brevo account —
-// never invent one.
-const NAME_ATTRIBUTE_CANDIDATES = ["NOMBRE", "FIRSTNAME", "NAME"];
+function brevoCreateAttributeUrl(attributeName: string): string {
+  // "normal" is Brevo's category for plain per-contact attributes (as
+  // opposed to "category", "calculated", "global", "transactional").
+  return `https://api.brevo.com/v3/contacts/attributes/normal/${encodeURIComponent(attributeName)}`;
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_GENDERS = ["Mujer", "Hombre", "Unisex"] as const;
+
+type NewFieldName = "firstName" | "lastName" | "phone" | "gender" | "birthDay" | "birthMonth";
+
+// Preference-ordered candidate attribute names per field. At runtime we only
+// ever use one that actually exists in the Brevo account — never invent one
+// on top of an ambiguous existing set. If more than one candidate exists we
+// refuse (same rule as the list-resolution step below); if none exist we
+// create the first (canonical) candidate via the Attributes API.
+//
+// Two reserved/standard Brevo attributes are deliberately EXCLUDED from these
+// candidate lists rather than reused, because repurposing them would guess at
+// a mapping with real side effects instead of just a naming ambiguity:
+//   - "SMS": Brevo's built-in attribute for the SMS marketing channel. Writing
+//     the phone number there could implicitly opt the contact into SMS
+//     campaigns/consent flows. We use a plain custom "PHONE" attribute
+//     instead, and this should be confirmed before relying on it for SMS.
+//   - "BIRTHDAY": Brevo's built-in attribute is a full date (day+month+year).
+//     We only collect day and month (no year), so it cannot be populated
+//     without inventing a fake year. We store day/month as two separate
+//     custom numeric attributes instead.
+const FIELD_SPECS: {
+  field: NewFieldName;
+  candidates: string[];
+  createType: "text" | "float";
+}[] = [
+  { field: "firstName", candidates: ["FIRSTNAME", "NOMBRE", "NOMBRES"], createType: "text" },
+  { field: "lastName", candidates: ["LASTNAME", "APELLIDO", "APELLIDOS"], createType: "text" },
+  { field: "phone", candidates: ["PHONE", "TELEFONO", "WHATSAPP"], createType: "text" },
+  { field: "gender", candidates: ["GENERO", "GENDER", "SEXO"], createType: "text" },
+  { field: "birthDay", candidates: ["BIRTH_DAY", "DIA_NACIMIENTO"], createType: "float" },
+  { field: "birthMonth", candidates: ["BIRTH_MONTH", "MES_NACIMIENTO"], createType: "float" },
+];
 
 function corsHeaders(origin: string | null) {
   return {
@@ -30,6 +64,37 @@ function jsonResponse(body: unknown, status: number, origin: string | null) {
   });
 }
 
+function toInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return parseInt(value.trim(), 10);
+  return null;
+}
+
+// Accepts Ecuadorian mobile numbers as 0987654321, 987654321, or
+// +593987654321 (with optional spaces/dashes/parentheses), and normalizes
+// them all to 593987654321. Anything that doesn't resolve to a 9-digit
+// mobile number (starting with 9) is rejected.
+function normalizeEcuadorMobile(raw: string): string | null {
+  const cleaned = raw.trim().replace(/[\s\-().]/g, "");
+
+  let subscriberNumber: string;
+  if (cleaned.startsWith("+593")) {
+    subscriberNumber = cleaned.slice(4);
+  } else if (cleaned.startsWith("593")) {
+    subscriberNumber = cleaned.slice(3);
+  } else if (cleaned.startsWith("0")) {
+    subscriberNumber = cleaned.slice(1);
+  } else {
+    subscriberNumber = cleaned;
+  }
+
+  if (!/^9\d{8}$/.test(subscriberNumber)) {
+    return null;
+  }
+
+  return `593${subscriberNumber}`;
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
 
@@ -41,22 +106,56 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Método no permitido." }, 405, origin);
   }
 
-  let body: { email?: unknown; name?: unknown };
+  let body: {
+    firstName?: unknown;
+    lastName?: unknown;
+    email?: unknown;
+    phone?: unknown;
+    gender?: unknown;
+    birthDay?: unknown;
+    birthMonth?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: "Cuerpo de la solicitud inválido: se esperaba JSON." }, 400, origin);
   }
 
+  const firstName = typeof body?.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body?.lastName === "string" ? body.lastName.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim() : "";
-  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const phoneRaw = typeof body?.phone === "string" ? body.phone : "";
+  const gender = typeof body?.gender === "string" ? body.gender.trim() : "";
+  const birthDay = toInt(body?.birthDay);
+  const birthMonth = toInt(body?.birthMonth);
 
   if (!EMAIL_RE.test(email)) {
     return jsonResponse({ error: "Correo electrónico inválido." }, 400, origin);
   }
 
-  if (name === "") {
+  if (firstName === "") {
     return jsonResponse({ error: "El nombre es obligatorio." }, 400, origin);
+  }
+
+  if (lastName === "") {
+    return jsonResponse({ error: "El apellido es obligatorio." }, 400, origin);
+  }
+
+  const normalizedPhone = normalizeEcuadorMobile(phoneRaw);
+  if (!normalizedPhone) {
+    return jsonResponse({ error: "Número de celular inválido." }, 400, origin);
+  }
+
+  if (!(VALID_GENDERS as readonly string[]).includes(gender)) {
+    return jsonResponse({ error: "Género inválido." }, 400, origin);
+  }
+
+  if (birthDay === null || birthDay < 1 || birthDay > 31) {
+    return jsonResponse({ error: "Día de nacimiento inválido." }, 400, origin);
+  }
+
+  if (birthMonth === null || birthMonth < 1 || birthMonth > 12) {
+    return jsonResponse({ error: "Mes de nacimiento inválido." }, 400, origin);
   }
 
   const apiKey = Deno.env.get("BREVO_API_KEY");
@@ -107,31 +206,82 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "No se pudo contactar el servicio de suscripción. Intenta de nuevo." }, 502, origin);
   }
 
-  // 2. Resolve which contact attribute holds the given name, if any of the
-  // known candidates exist in this Brevo account.
-  let nameAttribute: string | null = null;
+  // 2. Resolve which contact attribute holds each new field, creating it if
+  // none of its candidates exist yet. If more than one candidate exists for
+  // a field we refuse rather than guess which one is authoritative.
+  const resolvedAttributes: Partial<Record<NewFieldName, string>> = {};
+  const foundAttributes: Record<string, string> = {};
+  const createdAttributes: Record<string, string> = {};
+
+  let existingAttributeNames: Set<string>;
   try {
     const attrsRes = await fetch(BREVO_ATTRIBUTES_URL, { headers: brevoHeaders });
     const attrsJson = await attrsRes.json().catch(() => null);
 
-    if (attrsRes.ok && attrsJson && Array.isArray(attrsJson.attributes)) {
-      const existing = new Set(
-        attrsJson.attributes.map((a: { name: unknown }) => String(a.name).toUpperCase()),
-      );
-      nameAttribute = NAME_ATTRIBUTE_CANDIDATES.find((candidate) => existing.has(candidate)) ?? null;
-    } else {
+    if (!attrsRes.ok || !attrsJson || !Array.isArray(attrsJson.attributes)) {
       console.error("subscribe-newsletter: Brevo GetAttributes failed.", attrsRes.status);
+      return jsonResponse({ error: "No se pudo procesar la suscripción. Intenta más tarde." }, 502, origin);
     }
+
+    existingAttributeNames = new Set(
+      attrsJson.attributes.map((a: { name: unknown }) => String(a.name).toUpperCase()),
+    );
   } catch (err) {
     console.error("subscribe-newsletter: Brevo GetAttributes request failed.", err);
+    return jsonResponse({ error: "No se pudo contactar el servicio de suscripción. Intenta de nuevo." }, 502, origin);
   }
 
-  if (!nameAttribute) {
-    console.error(
-      "subscribe-newsletter: no known name attribute (NOMBRE/FIRSTNAME/NAME) found in Brevo account; " +
-        "creating/updating the contact without a name attribute.",
-    );
+  for (const spec of FIELD_SPECS) {
+    const matches = spec.candidates.filter((candidate) => existingAttributeNames.has(candidate));
+
+    if (matches.length > 1) {
+      console.error(
+        `subscribe-newsletter: ambiguous Brevo attribute mapping for "${spec.field}"; ` +
+          "more than one candidate exists in this account. Pin the correct one explicitly instead of guessing. " +
+          "Candidates found:",
+        matches,
+      );
+      return jsonResponse({ error: "Servicio no disponible temporalmente. Intenta más tarde." }, 500, origin);
+    }
+
+    if (matches.length === 1) {
+      resolvedAttributes[spec.field] = matches[0];
+      foundAttributes[spec.field] = matches[0];
+      continue;
+    }
+
+    const canonicalName = spec.candidates[0];
+    try {
+      const createRes = await fetch(brevoCreateAttributeUrl(canonicalName), {
+        method: "POST",
+        headers: brevoHeaders,
+        body: JSON.stringify({ type: spec.createType }),
+      });
+
+      if (!createRes.ok) {
+        console.error(
+          `subscribe-newsletter: failed to create Brevo attribute "${canonicalName}" for "${spec.field}".`,
+          createRes.status,
+        );
+        return jsonResponse({ error: "No se pudo completar la suscripción. Intenta más tarde." }, 502, origin);
+      }
+    } catch (err) {
+      console.error(
+        `subscribe-newsletter: request to create Brevo attribute "${canonicalName}" failed.`,
+        err,
+      );
+      return jsonResponse({ error: "No se pudo contactar el servicio de suscripción. Intenta de nuevo." }, 502, origin);
+    }
+
+    resolvedAttributes[spec.field] = canonicalName;
+    createdAttributes[spec.field] = canonicalName;
+    existingAttributeNames.add(canonicalName);
   }
+
+  console.log("subscribe-newsletter: Brevo attribute resolution.", {
+    found: foundAttributes,
+    created: createdAttributes,
+  });
 
   // 3. Create or update the contact on the resolved list. updateEnabled
   // means a duplicate email updates the existing contact instead of erroring.
@@ -139,10 +289,15 @@ Deno.serve(async (req: Request) => {
     email,
     listIds: [listId],
     updateEnabled: true,
+    attributes: {
+      [resolvedAttributes.firstName!]: firstName,
+      [resolvedAttributes.lastName!]: lastName,
+      [resolvedAttributes.phone!]: normalizedPhone,
+      [resolvedAttributes.gender!]: gender,
+      [resolvedAttributes.birthDay!]: birthDay,
+      [resolvedAttributes.birthMonth!]: birthMonth,
+    },
   };
-  if (nameAttribute) {
-    contactPayload.attributes = { [nameAttribute]: name };
-  }
 
   try {
     const createRes = await fetch(BREVO_CONTACTS_URL, {
