@@ -21,13 +21,18 @@ type NewFieldName = "firstName" | "lastName" | "phone" | "gender" | "birthDay" |
 // refuse (same rule as the list-resolution step below); if none exist we
 // create the first (canonical) candidate via the Attributes API.
 //
-// Two reserved/standard Brevo attributes are deliberately EXCLUDED from these
+// Reserved/standard Brevo attributes are deliberately EXCLUDED from these
 // candidate lists rather than reused, because repurposing them would guess at
 // a mapping with real side effects instead of just a naming ambiguity:
 //   - "SMS": Brevo's built-in attribute for the SMS marketing channel. Writing
 //     the phone number there could implicitly opt the contact into SMS
-//     campaigns/consent flows. We use a plain custom "PHONE" attribute
-//     instead, and this should be confirmed before relying on it for SMS.
+//     campaigns/consent flows.
+//   - "WHATSAPP": Brevo's built-in attribute for its WhatsApp channel.
+//     Observed live: an account already had this attribute, our resolver
+//     picked it up as a phone candidate by name match alone, and Brevo then
+//     rejected the contact write (its WhatsApp attribute enforces strict
+//     E.164-with-"+" formatting, which our normalized 593XXXXXXXXX doesn't
+//     match). We use a plain custom "PHONE" attribute instead.
 //   - "BIRTHDAY": Brevo's built-in attribute is a full date (day+month+year).
 //     We only collect day and month (no year), so it cannot be populated
 //     without inventing a fake year. We store day/month as two separate
@@ -39,7 +44,7 @@ const FIELD_SPECS: {
 }[] = [
   { field: "firstName", candidates: ["FIRSTNAME", "NOMBRE", "NOMBRES"], createType: "text" },
   { field: "lastName", candidates: ["LASTNAME", "APELLIDO", "APELLIDOS"], createType: "text" },
-  { field: "phone", candidates: ["PHONE", "TELEFONO", "WHATSAPP"], createType: "text" },
+  { field: "phone", candidates: ["PHONE", "TELEFONO"], createType: "text" },
   { field: "gender", candidates: ["GENERO", "GENDER", "SEXO"], createType: "text" },
   { field: "birthDay", candidates: ["BIRTH_DAY", "DIA_NACIMIENTO"], createType: "float" },
   { field: "birthMonth", candidates: ["BIRTH_MONTH", "MES_NACIMIENTO"], createType: "float" },
