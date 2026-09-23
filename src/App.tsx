@@ -17,6 +17,7 @@ import { CheckoutPage } from './components/CheckoutPage';
 import { CartDrawer } from './components/CartDrawer';
 import { SearchOverlay } from './components/SearchOverlay';
 import { FavoritesPage } from './components/FavoritesPage';
+import { VipPopup } from './components/VipPopup';
 import { CartItem } from './types';
 
 type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites';
@@ -213,6 +214,9 @@ export default function App() {
         onClose={() => setIsSearchOpen(false)}
         onNavigate={handleNavigate}
       />
+
+      {/* Induscrubs VIP signup popup (6s after load, once per session) */}
+      <VipPopup />
     </div>
   );
 }
