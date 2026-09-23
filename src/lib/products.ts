@@ -185,7 +185,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const escaped = trimmed.replace(/[%,]/g, '');
+  const escaped = trimmed.replace(/[%,()]/g, '');
   const { data, error } = await supabase
     .from('products')
     .select(PRODUCT_SELECT)
