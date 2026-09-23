@@ -1,4 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const VIP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 const BREVO_LISTS_URL = "https://api.brevo.com/v3/contacts/lists?limit=50&offset=0";
 const BREVO_ATTRIBUTES_URL = "https://api.brevo.com/v3/contacts/attributes";
@@ -318,6 +321,52 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("subscribe-newsletter: Brevo contact create/update request failed.", err);
     return jsonResponse({ error: "No se pudo contactar el servicio de suscripción. Intenta de nuevo." }, 502, origin);
+  }
+
+  // 4. Upsert the VIP row. vip_subscribers has RLS enabled with no policies,
+  // so this needs the service-role key. Both statements are idempotent, so if
+  // this step fails after Brevo succeeded, the client retrying the signup is safe.
+  //   - new email                        -> inserted, expires_at = now + 30d
+  //   - exists, still valid              -> untouched (neither statement matches)
+  //   - exists, expired and not redeemed -> expires_at refreshed to now + 30d
+  //   - exists, redeemed                 -> untouched, even if expired
+  // The email is lowercased for this table only: its unique constraint is
+  // case-sensitive, so Foo@x.com and foo@x.com would otherwise be two rows.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("subscribe-newsletter: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not available in function env.");
+    return jsonResponse({ error: "Servicio no disponible temporalmente. Intenta más tarde." }, 500, origin);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const vipEmail = email.toLowerCase();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const newExpiresAt = new Date(now.getTime() + VIP_WINDOW_MS).toISOString();
+
+  // INSERT ... ON CONFLICT (email) DO NOTHING. Existing rows are never overwritten here.
+  const { error: insertError } = await supabase
+    .from("vip_subscribers")
+    .upsert({ email: vipEmail, expires_at: newExpiresAt }, { onConflict: "email", ignoreDuplicates: true });
+
+  if (insertError) {
+    console.error("subscribe-newsletter: vip_subscribers insert failed.", insertError);
+    return jsonResponse({ error: "No se pudo completar la suscripción. Intenta más tarde." }, 502, origin);
+  }
+
+  // UPDATE ... WHERE email = $1 AND redeemed_at IS NULL AND expires_at <= now().
+  // A row inserted just above has expires_at in the future, so it never matches.
+  const { error: refreshError } = await supabase
+    .from("vip_subscribers")
+    .update({ expires_at: newExpiresAt })
+    .eq("email", vipEmail)
+    .is("redeemed_at", null)
+    .lte("expires_at", nowIso);
+
+  if (refreshError) {
+    console.error("subscribe-newsletter: vip_subscribers refresh failed.", refreshError);
+    return jsonResponse({ error: "No se pudo completar la suscripción. Intenta más tarde." }, 502, origin);
   }
 
   return jsonResponse({ success: true }, 200, origin);
