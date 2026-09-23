@@ -154,11 +154,13 @@ export type Database = {
           customer_phone: string
           delivery_address: string | null
           delivery_type: Database["public"]["Enums"]["delivery_type"]
+          discount_amount: number
           id: string
           notes: string | null
           order_number: string
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_proof_url: string | null
+          shipping_fee: number
           status: Database["public"]["Enums"]["order_status"]
           store_branch: string | null
           total: number
@@ -171,11 +173,13 @@ export type Database = {
           customer_phone: string
           delivery_address?: string | null
           delivery_type: Database["public"]["Enums"]["delivery_type"]
+          discount_amount?: number
           id?: string
           notes?: string | null
           order_number: string
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_proof_url?: string | null
+          shipping_fee?: number
           status?: Database["public"]["Enums"]["order_status"]
           store_branch?: string | null
           total?: number
@@ -188,11 +192,13 @@ export type Database = {
           customer_phone?: string
           delivery_address?: string | null
           delivery_type?: Database["public"]["Enums"]["delivery_type"]
+          discount_amount?: number
           id?: string
           notes?: string | null
           order_number?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_proof_url?: string | null
+          shipping_fee?: number
           status?: Database["public"]["Enums"]["order_status"]
           store_branch?: string | null
           total?: number
@@ -432,6 +438,24 @@ export type Database = {
           },
         ]
       }
+      public_order_attempts: {
+        Row: {
+          created_at: string
+          id: number
+          identifier: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          identifier: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          identifier?: string
+        }
+        Relationships: []
+      }
       sizes: {
         Row: {
           code: string
@@ -446,6 +470,41 @@ export type Database = {
           sort_order?: number
         }
         Relationships: []
+      }
+      vip_subscribers: {
+        Row: {
+          email: string
+          expires_at: string
+          id: string
+          redeemed_at: string | null
+          redeemed_order_id: string | null
+          subscribed_at: string
+        }
+        Insert: {
+          email: string
+          expires_at: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_order_id?: string | null
+          subscribed_at?: string
+        }
+        Update: {
+          email?: string
+          expires_at?: string
+          id?: string
+          redeemed_at?: string | null
+          redeemed_order_id?: string | null
+          subscribed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_subscribers_redeemed_order_id_fkey"
+            columns: ["redeemed_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -493,7 +552,7 @@ export type Database = {
       }
     }
     Enums: {
-      delivery_type: "Domicilio" | "Retiro en tienda"
+      delivery_type: "Domicilio" | "Retiro en tienda" | "Envío nacional"
       gender_type: "Mujer" | "Hombre" | "Unisex"
       order_status: "Pendiente de verificación" | "Confirmado" | "Cancelado"
       payment_method: "Transferencia" | "PayPhone" | "Efectivo"
@@ -512,12 +571,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -541,11 +600,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -566,11 +625,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -591,11 +650,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -608,11 +667,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -624,7 +683,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      delivery_type: ["Domicilio", "Retiro en tienda"],
+      delivery_type: ["Domicilio", "Retiro en tienda", "Envío nacional"],
       gender_type: ["Mujer", "Hombre", "Unisex"],
       order_status: ["Pendiente de verificación", "Confirmado", "Cancelado"],
       payment_method: ["Transferencia", "PayPhone", "Efectivo"],
