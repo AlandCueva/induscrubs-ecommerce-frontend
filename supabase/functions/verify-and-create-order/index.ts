@@ -29,7 +29,7 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-type VipDiscountResult = { applied: boolean; amount: number };
+type VipDiscountResult = { applied: boolean; amount: number; total?: number };
 
 // VIP discount: 10% off the subtotal (items only, not shipping) when the
 // order's email has a non-expired, unredeemed row in vip_subscribers.
@@ -40,7 +40,7 @@ async function applyVipDiscount(
   supabaseUrl: string,
   orderNumber: string,
 ): Promise<VipDiscountResult & { subtotal: number | null }> {
-  const none = { applied: false, amount: 0, subtotal: null };
+  const none = { applied: false, amount: 0, subtotal: null as number | null };
 
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceKey) {
@@ -64,8 +64,9 @@ async function applyVipDiscount(
       return none;
     }
 
-    // orders.total = sum(items) + shipping_fee (enforced by trigger), so the
-    // subtotal is derived server-side from the persisted order.
+    // orders.total = sum(items) + shipping_fee - discount_amount (enforced by
+    // trigger; discount_amount is 0 on a fresh order), so the subtotal is
+    // derived server-side from the persisted order.
     const subtotal = roundCents(Number(order.total) - Number(order.shipping_fee));
     const email = String(order.customer_email).trim();
     if (!email || subtotal <= 0) return { ...none, subtotal };
@@ -90,7 +91,34 @@ async function applyVipDiscount(
 
     if (!claimed || claimed.length === 0) return { ...none, subtotal };
 
-    return { applied: true, amount: roundCents(subtotal * VIP_DISCOUNT_RATE), subtotal };
+    // Persist the discount. This UPDATE fires trg_enforce_order_total, which
+    // recomputes orders.total as items + shipping - discount_amount.
+    const amount = roundCents(subtotal * VIP_DISCOUNT_RATE);
+    const { data: updated, error: persistErr } = await admin
+      .from("orders")
+      .update({ discount_amount: amount })
+      .eq("id", order.id)
+      .select("total")
+      .single();
+
+    if (persistErr || !updated) {
+      // The order would stay at full price, so give the coupon back rather than
+      // burn it without a discount, and report no discount.
+      console.error("verify-and-create-order: failed to persist VIP discount; releasing redemption.", persistErr);
+      const { error: releaseErr } = await admin
+        .from("vip_subscribers")
+        .update({ redeemed_at: null, redeemed_order_id: null })
+        .eq("redeemed_order_id", order.id);
+      if (releaseErr) {
+        console.error(
+          `verify-and-create-order: could not release VIP redemption for order ${orderNumber}; fix manually.`,
+          releaseErr,
+        );
+      }
+      return { ...none, subtotal };
+    }
+
+    return { applied: true, amount, subtotal, total: roundCents(Number(updated.total)) };
   } catch (err) {
     console.error("verify-and-create-order: VIP discount check failed unexpectedly.", err);
     return none;
@@ -221,15 +249,16 @@ Deno.serve(async (req: Request) => {
   let subtotal: number | null = null;
   if (orderNumber && orderTotal !== null) {
     const vip = await applyVipDiscount(supabaseUrl, orderNumber);
-    discount = { applied: vip.applied, amount: vip.amount };
+    discount = { applied: vip.applied, amount: vip.amount, total: vip.total };
     subtotal = vip.subtotal;
   }
 
   return jsonResponse(
     {
       orderNumber,
-      // Amount the customer actually pays (after any VIP discount).
-      total: orderTotal !== null ? roundCents(orderTotal - discount.amount) : null,
+      // Amount the customer actually pays: the persisted orders.total, which
+      // already has any VIP discount subtracted by trg_enforce_order_total.
+      total: discount.total ?? orderTotal,
       originalTotal: orderTotal,
       subtotal,
       discount: {
