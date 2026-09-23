@@ -217,17 +217,19 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "No se pudo contactar el servicio de verificación. Intenta de nuevo." }, 502, origin);
   }
 
-  // 2. Turnstile passed — call create_public_order with the anon key. The RPC
-  // does its own validation (payment method whitelist, delivery/address rule,
-  // forced status, server-derived pricing, atomic stock deduction).
+  // 2. Turnstile passed — call create_public_order with the service-role key so the
+  // RPC can only ever be reached through this CAPTCHA-gated path, never directly by
+  // anon/authenticated clients. The RPC does its own validation regardless (payment
+  // method whitelist, delivery/address rule, forced status, server-derived pricing,
+  // atomic stock deduction).
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("verify-and-create-order: SUPABASE_URL/SUPABASE_ANON_KEY not available in function env.");
+  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    console.error("verify-and-create-order: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not available in function env.");
     return jsonResponse({ error: "Configuración del servidor incompleta." }, 500, origin);
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
   const { data, error } = await supabase.rpc("create_public_order", orderPayload as Record<string, unknown>);
 
