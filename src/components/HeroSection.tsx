@@ -13,7 +13,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
   return (
     <section
       id="hero"
-      className="relative w-full h-[100dvh] flex items-center justify-center overflow-hidden border-b border-[#DDE3EA]"
+      className="relative w-full min-h-[100svh] flex items-center justify-center overflow-hidden border-b border-[#DDE3EA]"
     >
       {/* Background Video & Static Fallback for Reduced Motion */}
       <div className="absolute inset-0 w-full h-full overflow-hidden bg-[#16232F]">
@@ -51,12 +51,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
         />
       </div>
 
-      {/* Centered Single-Column Content vertically and horizontally centered in 100dvh */}
+      {/* Centered Single-Column Content vertically and horizontally centered in 100svh */}
       <div className="relative z-10 max-container w-full pt-16 sm:pt-20 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
         <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
           {/* Main Display Heading */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FFFFFF] leading-[1.08] mb-4 sm:mb-6 text-center">
-            Resiste guardias sin fin.
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FFFFFF] leading-[1.08] mb-4 sm:mb-6 text-center break-words">
+            Tú cuidas de otros, nosotros cuidamos de ti.
           </h1>
 
           {/* Subtitle */}
@@ -64,41 +64,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
             Uniformes médicos pensados para quienes cuidan.
           </p>
 
-          {/* CTA Buttons: Top row with Women & Men, bottom row with VER COLECCIÓN */}
-          <div className="w-full sm:w-auto flex flex-col items-center justify-center gap-3.5 sm:gap-4">
-            <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 sm:gap-4">
-              {/* CTA 1: SHOP FOR WOMEN */}
-              <button
-                type="button"
-                onClick={() => onNavigate ? onNavigate('catalog', { filterType: 'gender', value: 'Mujer' }) : onNavigateToCatalog()}
-                className="h-12 px-6 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
-                aria-label="Comprar colección para mujer"
-              >
-                <span>SHOP FOR WOMEN</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              {/* CTA 2: SHOP FOR MEN */}
-              <button
-                type="button"
-                onClick={() => onNavigate ? onNavigate('catalog', { filterType: 'gender', value: 'Hombre' }) : onNavigateToCatalog()}
-                className="h-12 px-6 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
-                aria-label="Comprar colección para hombre"
-              >
-                <span>SHOP FOR MEN</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* CTA 3: VER COLECCIÓN (placed below) */}
+          {/* CTA: Size help (no action yet) */}
+          <div className="w-full sm:w-auto flex flex-col items-center justify-center">
             <button
               type="button"
-              onClick={onNavigateToCatalog}
-              className="w-full sm:w-auto h-12 px-6 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
-              aria-label="Ver toda la colección"
+              className="w-full sm:w-auto max-w-full h-auto py-3 lg:h-12 lg:py-0 px-6 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
             >
-              <span>VER COLECCIÓN</span>
-              <ArrowRight className="w-4 h-4" />
+              <span className="min-w-0 text-center leading-snug">¿No sabes tu talla? ¡Nosotros te ayudamos!</span>
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </button>
           </div>
         </div>
