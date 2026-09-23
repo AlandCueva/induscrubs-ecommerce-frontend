@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ArrowLeft,
   Building2,
@@ -13,6 +13,7 @@ import {
   Banknote,
   Home,
   MapPin,
+  Truck,
   Upload,
   Loader2,
   AlertCircle,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { CartItem } from '../types';
 import { getTurnstileToken } from '../lib/turnstile';
+import { STORE_INFO } from '../data/products';
 import {
   submitPublicOrder,
   uploadPaymentReceipt,
@@ -80,7 +82,9 @@ const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const MIN_PHONE_DIGITS = 7;
 
 type PaymentMethod = 'Transferencia' | 'PayPhone' | 'Efectivo';
-type DeliveryType = 'Domicilio' | 'Retiro en tienda';
+type DeliveryType = 'Domicilio' | 'Retiro en tienda' | 'Envío nacional';
+type ShippingScope = 'Loja' | 'Nacional';
+const NATIONAL_SHIPPING_FEE = 7;
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -93,6 +97,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [shippingScope, setShippingScope] = useState<ShippingScope>('Loja');
   const [deliveryType, setDeliveryType] = useState<DeliveryType | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
 
@@ -104,6 +109,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
   const [receiptFileError, setReceiptFileError] = useState<string | null>(null);
 
   // Submission
+  // isSubmitting (state) drives the UI lock; isSubmittingRef is the synchronous
+  // guard — state updates are batched/async, so a second click fired in the same
+  // tick as the first could still read a stale `isSubmitting === false` and slip
+  // through before React re-renders with the fieldset disabled.
+  const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
@@ -113,7 +123,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
   const payphoneFee = paymentMethod === 'PayPhone' ? subtotal * 0.05 : 0;
-  const total = subtotal + payphoneFee;
+  const shippingFee = shippingScope === 'Nacional' ? NATIONAL_SHIPPING_FEE : 0;
+  const total = subtotal + payphoneFee + shippingFee;
 
   const selectedBank = BANKS.find((b) => b.id === selectedBankId) || null;
 
@@ -123,10 +134,32 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
     EMAIL_RE.test(customerEmail.trim());
 
   const isDeliveryValid =
-    deliveryType === 'Retiro en tienda' ||
-    (deliveryType === 'Domicilio' && deliveryAddress.trim().length > 0);
+    shippingScope === 'Nacional'
+      ? deliveryAddress.trim().length > 0
+      : deliveryType === 'Retiro en tienda' ||
+        (deliveryType === 'Domicilio' && deliveryAddress.trim().length > 0);
 
   const isDetailsValid = isContactValid && isDeliveryValid;
+
+  const handleSelectShippingScope = (scope: ShippingScope) => {
+    setShippingScope(scope);
+    if (scope === 'Nacional') {
+      setDeliveryType('Envío nacional');
+    } else if (deliveryType === 'Envío nacional') {
+      setDeliveryType(null);
+    }
+  };
+
+  const nationalWhatsappMessage = encodeURIComponent(
+    'Hola Induscrubs, quiero gestionar mi pedido de envío nacional.'
+  );
+  const nationalWhatsappUrl = `https://wa.me/${STORE_INFO.whatsapp}?text=${nationalWhatsappMessage}`;
+
+  const handleNationalOrderWhatsApp = (method: 'Transferencia' | 'Efectivo') => {
+    if (isSubmittingRef.current) return;
+    window.open(nationalWhatsappUrl, '_blank', 'noopener,noreferrer');
+    void handleSubmitOrder(method);
+  };
 
   const handleCopyAccountNumber = () => {
     if (!selectedBank) return;
@@ -135,8 +168,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
     setTimeout(() => setCopiedNumber(false), 2000);
   };
 
+  // After the order is registered the cart is cleared (so `total` drops to 0);
+  // the server-confirmed total is the one to quote from then on.
+  const whatsappTotal = orderResult ? orderResult.total : total;
   const whatsappMessage = encodeURIComponent(
-    `Hola Induscrubs, adjunto mi comprobante de transferencia bancaria por un total de $${total.toFixed(
+    `Hola Induscrubs, adjunto mi comprobante de transferencia bancaria por un total de $${whatsappTotal.toFixed(
       2
     )}${selectedBank ? ` (${selectedBank.name})` : ''} para mi pedido de uniformes.`
   );
@@ -165,8 +201,29 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
   };
 
   const handleSubmitOrder = async (method: 'Transferencia' | 'Efectivo') => {
-    if (!isDetailsValid || isSubmitting) return;
+    if (!isDetailsValid || isSubmittingRef.current) return;
 
+    // Freeze everything that defines the order into a single snapshot, taken
+    // synchronously before any await. The RPC call below is only ever built
+    // from this snapshot — never from live state — so if the customer changes
+    // their delivery scope, address, or contact info while this submission is
+    // still in flight (awaiting the receipt upload / Turnstile / network),
+    // that later change cannot leak into the order already being created.
+    const snapshot = {
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail.trim(),
+      deliveryType: deliveryType as DeliveryType,
+      deliveryAddress: deliveryAddress.trim(),
+      items: items.map((item) => ({
+        product_id: item.productId,
+        size_code: item.size,
+        color_id: item.colorId ?? '',
+        quantity: item.qty,
+      })),
+    };
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
     setUploadWarning(null);
@@ -187,20 +244,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
       const turnstileToken = await getTurnstileToken();
 
       const payload: CreatePublicOrderPayload = {
-        p_customer_name: customerName.trim(),
-        p_customer_phone: customerPhone.trim(),
-        p_customer_email: customerEmail.trim(),
+        p_customer_name: snapshot.customerName,
+        p_customer_phone: snapshot.customerPhone,
+        p_customer_email: snapshot.customerEmail,
         p_payment_method: method,
-        p_delivery_type: deliveryType as DeliveryType,
-        p_delivery_address: deliveryType === 'Domicilio' ? deliveryAddress.trim() : null,
+        p_delivery_type: snapshot.deliveryType,
+        p_delivery_address:
+          snapshot.deliveryType === 'Domicilio' || snapshot.deliveryType === 'Envío nacional'
+            ? snapshot.deliveryAddress
+            : null,
         p_notes: null,
         p_payment_proof_url: proofPath,
-        p_items: items.map((item) => ({
-          product_id: item.productId,
-          size_code: item.size,
-          color_id: item.colorId ?? '',
-          quantity: item.qty,
-        })),
+        p_items: snapshot.items,
       };
 
       const result = await submitPublicOrder(payload, turnstileToken);
@@ -215,6 +270,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
         setSubmitError('No pudimos procesar tu pedido. Inténtalo de nuevo.');
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -339,7 +395,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                 </div>
               </div>
             ) : (
-              <>
+              <fieldset
+                disabled={isSubmitting}
+                className="border-0 p-0 m-0 min-w-0 space-y-8 disabled:opacity-70"
+              >
                 {/* STEP 1 — "Tus datos de contacto" */}
                 <div id="checkout-step-1" className="space-y-4">
                   <div className="flex items-center gap-3">
@@ -397,11 +456,91 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                   </div>
                 </div>
 
-                {/* STEP 2 — "Entrega" */}
-                <div id="checkout-step-2" className="space-y-4 pt-4 border-t border-[#EAEFF4]">
+                {/* STEP 2 — "Alcance del envío" */}
+                <div id="checkout-step-2-scope" className="space-y-4 pt-4 border-t border-[#EAEFF4]">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
                       2
+                    </div>
+                    <h2
+                      className="text-lg font-bold text-[#16232F]"
+                      style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+                    >
+                      ¿A dónde enviamos tu pedido?
+                    </h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pl-11">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectShippingScope('Loja')}
+                      className={`relative flex items-start gap-3.5 p-4 rounded-[6px] border-2 text-left transition-all cursor-pointer ${
+                        shippingScope === 'Loja'
+                          ? 'border-[#2C63AE] bg-[#2C63AE]/5 shadow-xs'
+                          : 'border-[#DDE3EA] bg-[#FFFFFF] hover:border-[#16232F]/40'
+                      }`}
+                    >
+                      <div className="mt-0.5">
+                        <div
+                          className={`w-4 h-4 rounded-[3px] border flex items-center justify-center ${
+                            shippingScope === 'Loja'
+                              ? 'border-[#2C63AE] bg-[#2C63AE]'
+                              : 'border-[#DDE3EA] bg-white'
+                          }`}
+                        >
+                          {shippingScope === 'Loja' && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Home className="w-4 h-4 text-[#2C63AE]" />
+                          <span className="text-sm font-bold text-[#16232F]">Envíos gratis en Loja</span>
+                        </div>
+                        <p className="text-xs text-[#5A6E85] mt-1 leading-snug">
+                          Domicilio o retiro en tienda, sin costo adicional
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectShippingScope('Nacional')}
+                      className={`relative flex items-start gap-3.5 p-4 rounded-[6px] border-2 text-left transition-all cursor-pointer ${
+                        shippingScope === 'Nacional'
+                          ? 'border-[#2C63AE] bg-[#2C63AE]/5 shadow-xs'
+                          : 'border-[#DDE3EA] bg-[#FFFFFF] hover:border-[#16232F]/40'
+                      }`}
+                    >
+                      <div className="mt-0.5">
+                        <div
+                          className={`w-4 h-4 rounded-[3px] border flex items-center justify-center ${
+                            shippingScope === 'Nacional'
+                              ? 'border-[#2C63AE] bg-[#2C63AE]'
+                              : 'border-[#DDE3EA] bg-white'
+                          }`}
+                        >
+                          {shippingScope === 'Nacional' && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-[#2C63AE]" />
+                          <span className="text-sm font-bold text-[#16232F]">Envío Nacional (+$7)</span>
+                        </div>
+                        <p className="text-xs text-[#5A6E85] mt-1 leading-snug">
+                          Entrega a cualquier ciudad del Ecuador vía courier
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* STEP 3 — "Entrega" (Loja: Domicilio/Retiro; Nacional: dirección de envío) */}
+                {shippingScope === 'Loja' ? (
+                  <div id="checkout-step-3" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
+                      3
                     </div>
                     <h2
                       className="text-lg font-bold text-[#16232F]"
@@ -495,14 +634,49 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                       />
                     </div>
                   )}
-                </div>
-
-                {/* STEP 3 — "Elegí tu método de pago" (only once contact + delivery are valid) */}
-                {isDetailsValid && (
-                  <div id="checkout-step-3" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
+                  </div>
+                ) : (
+                  <div id="checkout-step-3-nacional" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
                         3
+                      </div>
+                      <h2
+                        className="text-lg font-bold text-[#16232F]"
+                        style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+                      >
+                        Dirección de envío nacional
+                      </h2>
+                    </div>
+
+                    <div className="pl-11">
+                      <label
+                        className="block text-xs font-semibold text-[#16232F] mb-1.5"
+                        htmlFor="delivery-address-nacional"
+                      >
+                        Dirección completa
+                      </label>
+                      <input
+                        id="delivery-address-nacional"
+                        type="text"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="Calle, número, ciudad y provincia..."
+                        className="w-full h-11 px-3.5 rounded-[6px] border border-[#DDE3EA] text-sm text-[#16232F] focus:outline-none focus:border-[#2C63AE] focus:ring-1 focus:ring-[#2C63AE]"
+                      />
+                      <p className="text-xs text-[#5A6E85] mt-1.5">
+                        Incluye ciudad y provincia para que el courier pueda ubicarte.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4 — "Elegí tu método de pago" (only once contact + delivery are valid) */}
+                {isDetailsValid && (
+                  <div id="checkout-step-4" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
+                        4
                       </div>
                       <h2
                         className="text-lg font-bold text-[#16232F]"
@@ -649,12 +823,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                   </div>
                 )}
 
-                {/* IF EFECTIVO IS SELECTED: immediate submit, no "ya pagué" step */}
-                {isDetailsValid && paymentMethod === 'Efectivo' && (
-                  <div id="checkout-step-4-efectivo" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
+                {/* IF EFECTIVO IS SELECTED (Loja scope): immediate submit, no "ya pagué" step */}
+                {isDetailsValid && paymentMethod === 'Efectivo' && shippingScope === 'Loja' && (
+                  <div id="checkout-step-5-efectivo" className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
-                        4
+                        5
                       </div>
                       <h2
                         className="text-lg font-bold text-[#16232F]"
@@ -689,14 +863,59 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                   </div>
                 )}
 
-                {/* IF TRANSFERENCIA IS SELECTED: progressive bank steps */}
-                {isDetailsValid && paymentMethod === 'Transferencia' && (
-                  <>
-                    {/* STEP 4 — "Elegí tu banco" */}
-                    <div id="checkout-step-4" className="space-y-4 pt-4 border-t border-[#EAEFF4]">
+                {/* IF NATIONAL SHIPPING + (TRANSFERENCIA OR EFECTIVO): skip the guided flow, single WhatsApp button */}
+                {isDetailsValid &&
+                  shippingScope === 'Nacional' &&
+                  (paymentMethod === 'Transferencia' || paymentMethod === 'Efectivo') && (
+                    <div
+                      id="checkout-step-5-nacional-whatsapp"
+                      className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
-                          4
+                          5
+                        </div>
+                        <h2
+                          className="text-lg font-bold text-[#16232F]"
+                          style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+                        >
+                          Gestioná tu pedido por WhatsApp
+                        </h2>
+                      </div>
+
+                      <div className="pl-11 space-y-3">
+                        <p className="text-sm text-[#5A6E85]">
+                          Para envíos a nivel nacional coordinamos el pago y el courier directamente
+                          por WhatsApp. Al hacer clic, tu pedido queda registrado y se abrirá el
+                          chat para continuar.
+                        </p>
+
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => handleNationalOrderWhatsApp(paymentMethod)}
+                          className="w-full h-14 bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-60 disabled:cursor-not-allowed text-[#FFFFFF] text-sm font-bold uppercase tracking-wider rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[56px] shadow-sm cursor-pointer"
+                          style={{ fontFamily: "'Inter Variable', Inter, sans-serif", fontWeight: 700 }}
+                        >
+                          {isSubmitting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <MessageCircle className="w-4 h-4 fill-white" />
+                          )}
+                          <span>{isSubmitting ? 'PROCESANDO...' : 'Gestionar mi pedido por WhatsApp'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                {/* IF TRANSFERENCIA IS SELECTED (Loja scope): progressive bank steps */}
+                {isDetailsValid && paymentMethod === 'Transferencia' && shippingScope === 'Loja' && (
+                  <>
+                    {/* STEP 5 — "Elegí tu banco" */}
+                    <div id="checkout-step-5" className="space-y-4 pt-4 border-t border-[#EAEFF4]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
+                          5
                         </div>
                         <h2
                           className="text-lg font-bold text-[#16232F]"
@@ -752,14 +971,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
 
                     {selectedBank && (
                       <>
-                        {/* STEP 5 — "Datos para tu depósito" */}
+                        {/* STEP 6 — "Datos para tu depósito" */}
                         <div
-                          id="checkout-step-5"
+                          id="checkout-step-6"
                           className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
-                              5
+                              6
                             </div>
                             <h2
                               className="text-lg font-bold text-[#16232F]"
@@ -870,14 +1089,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                           </div>
                         </div>
 
-                        {/* STEP 6 — "Enviá tu comprobante de pago" (WhatsApp + optional upload, neither required) */}
+                        {/* STEP 7 — "Enviá tu comprobante de pago" (WhatsApp + optional upload, neither required) */}
                         <div
-                          id="checkout-step-6"
+                          id="checkout-step-7"
                           className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
-                              6
+                              7
                             </div>
                             <h2
                               className="text-lg font-bold text-[#16232F]"
@@ -955,14 +1174,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                           </div>
                         </div>
 
-                        {/* STEP 7 — "Ya realicé el pago" */}
+                        {/* STEP 8 — "Ya realicé el pago" */}
                         <div
-                          id="checkout-step-7"
+                          id="checkout-step-8"
                           className="space-y-4 pt-4 border-t border-[#EAEFF4] animate-fade-in"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-[6px] bg-[#2C63AE] text-[#FFFFFF] text-sm flex items-center justify-center font-bold shrink-0">
-                              7
+                              8
                             </div>
                             <h2
                               className="text-lg font-bold text-[#16232F]"
@@ -1012,7 +1231,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                     <span>{submitError}</span>
                   </div>
                 )}
-              </>
+              </fieldset>
             )}
           </div>
 
@@ -1066,12 +1285,19 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                   <span className="font-semibold text-[#16232F]">${subtotal.toFixed(2)}</span>
                 </div>
 
-                <div className="flex justify-between items-center">
-                  <span>Envío</span>
-                  <span className="font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-[4px]">
-                    Gratis
-                  </span>
-                </div>
+                {shippingScope === 'Nacional' ? (
+                  <div className="flex justify-between items-center">
+                    <span>Envío Nacional</span>
+                    <span className="font-semibold text-[#16232F]">${shippingFee.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span>Envío</span>
+                    <span className="font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-[4px]">
+                      Gratis
+                    </span>
+                  </div>
+                )}
 
                 {paymentMethod === 'PayPhone' && (
                   <div className="flex justify-between items-center text-[#2C63AE]">

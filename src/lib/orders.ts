@@ -18,7 +18,7 @@ export interface CreatePublicOrderPayload {
   p_customer_phone: string;
   p_customer_email: string;
   p_payment_method: 'Transferencia' | 'Efectivo';
-  p_delivery_type: 'Domicilio' | 'Retiro en tienda';
+  p_delivery_type: 'Domicilio' | 'Retiro en tienda' | 'Envío nacional';
   p_delivery_address: string | null;
   p_notes: string | null;
   p_payment_proof_url: string | null;
