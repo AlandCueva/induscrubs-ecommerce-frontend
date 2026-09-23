@@ -17,6 +17,86 @@ const REQUIRED_ORDER_KEYS = [
   "p_items",
 ];
 
+const VIP_DISCOUNT_RATE = 0.1;
+
+function roundCents(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+// Escapes LIKE wildcards so an email such as "ana_perez@x.com" is matched
+// literally (case-insensitively via ilike) instead of "_" matching any char.
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+type VipDiscountResult = { applied: boolean; amount: number };
+
+// VIP discount: 10% off the subtotal (items only, not shipping) when the
+// order's email has a non-expired, unredeemed row in vip_subscribers.
+// The amount is derived from the order row the RPC just created, never from
+// anything the client sent. Any failure or unmet condition returns
+// { applied: false } so checkout is never blocked by the discount.
+async function applyVipDiscount(
+  supabaseUrl: string,
+  orderNumber: string,
+): Promise<VipDiscountResult & { subtotal: number | null }> {
+  const none = { applied: false, amount: 0, subtotal: null };
+
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceKey) {
+    console.error("verify-and-create-order: SUPABASE_SERVICE_ROLE_KEY not available; skipping VIP discount.");
+    return none;
+  }
+
+  try {
+    // vip_subscribers and orders reads/writes below need the service role
+    // (vip_subscribers has RLS enabled with no policies).
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    const { data: order, error: orderErr } = await admin
+      .from("orders")
+      .select("id, customer_email, shipping_fee, total")
+      .eq("order_number", orderNumber)
+      .single();
+
+    if (orderErr || !order) {
+      console.error("verify-and-create-order: could not load new order for VIP check.", orderErr);
+      return none;
+    }
+
+    // orders.total = sum(items) + shipping_fee (enforced by trigger), so the
+    // subtotal is derived server-side from the persisted order.
+    const subtotal = roundCents(Number(order.total) - Number(order.shipping_fee));
+    const email = String(order.customer_email).trim();
+    if (!email || subtotal <= 0) return { ...none, subtotal };
+
+    // Atomic check-and-redeem: a single UPDATE whose WHERE clause carries every
+    // condition (unredeemed, unexpired). Postgres row-locks the matching row and
+    // re-evaluates the WHERE after a concurrent transaction commits, so of N
+    // simultaneous requests exactly one gets a row back; the rest get zero rows.
+    const nowIso = new Date().toISOString();
+    const { data: claimed, error: claimErr } = await admin
+      .from("vip_subscribers")
+      .update({ redeemed_at: nowIso, redeemed_order_id: order.id })
+      .ilike("email", escapeLike(email))
+      .is("redeemed_at", null)
+      .gt("expires_at", nowIso)
+      .select("id");
+
+    if (claimErr) {
+      console.error("verify-and-create-order: VIP redeem update failed.", claimErr);
+      return { ...none, subtotal };
+    }
+
+    if (!claimed || claimed.length === 0) return { ...none, subtotal };
+
+    return { applied: true, amount: roundCents(subtotal * VIP_DISCOUNT_RATE), subtotal };
+  } catch (err) {
+    console.error("verify-and-create-order: VIP discount check failed unexpectedly.", err);
+    return none;
+  }
+}
+
 function corsHeaders(origin: string | null) {
   return {
     "Access-Control-Allow-Origin": origin ?? "*",
@@ -131,10 +211,32 @@ Deno.serve(async (req: Request) => {
 
   const row = Array.isArray(data) ? data[0] : data;
 
+  const orderNumber: string | null = row?.order_number ?? null;
+  const orderTotal = row?.total != null ? Number(row.total) : null;
+
+  // 3. VIP discount. Runs after the order exists because vip_subscribers
+  // .redeemed_order_id references orders(id). The discount is computed here
+  // (server-side) — nothing about it is read from the request.
+  let discount: VipDiscountResult = { applied: false, amount: 0 };
+  let subtotal: number | null = null;
+  if (orderNumber && orderTotal !== null) {
+    const vip = await applyVipDiscount(supabaseUrl, orderNumber);
+    discount = { applied: vip.applied, amount: vip.amount };
+    subtotal = vip.subtotal;
+  }
+
   return jsonResponse(
     {
-      orderNumber: row?.order_number ?? null,
-      total: row?.total ?? null,
+      orderNumber,
+      // Amount the customer actually pays (after any VIP discount).
+      total: orderTotal !== null ? roundCents(orderTotal - discount.amount) : null,
+      originalTotal: orderTotal,
+      subtotal,
+      discount: {
+        applied: discount.applied,
+        amount: discount.amount,
+        ...(discount.applied ? { type: "vip", percent: VIP_DISCOUNT_RATE * 100 } : {}),
+      },
     },
     200,
     origin,
