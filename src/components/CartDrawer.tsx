@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { X, Plus, Minus, Trash2, ShoppingBag, Truck } from 'lucide-react';
 import { CartItem } from '../types';
+import { VIP_DISCOUNT_PERCENT, computeVipDiscount, useVipEligibility } from '../lib/vip';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -42,6 +43,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const totalItemCount = items.reduce((sum, item) => sum + item.qty, 0);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const { eligible: vipEligible } = useVipEligibility();
+  const vipDiscount = vipEligible ? computeVipDiscount(subtotal) : 0;
 
   return (
     <div
@@ -216,23 +219,37 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </span>
             </div>
 
+            {/* VIP preview (client-side estimate; the order response has the real total) */}
+            {vipEligible && (
+              <div className="space-y-1.5 text-xs text-[#5A6E85]">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-[#16232F]">${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[#2C63AE]">
+                  <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%</span>
+                  <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             {/* Subtotal Row */}
             <div className="flex items-baseline justify-between pt-1">
               <span
                 className="text-sm font-semibold text-[#16232F]"
                 style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
               >
-                Subtotal
+                {vipEligible ? 'Total estimado' : 'Subtotal'}
               </span>
               <div className="text-right">
                 <span
                   className="text-2xl font-bold text-[#2C63AE] tracking-tight"
                   style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
                 >
-                  ${subtotal.toFixed(2)}
+                  ${(subtotal - vipDiscount).toFixed(2)}
                 </span>
                 <span className="block text-[11px] text-[#5A6E85] mt-0.5">
-                  IVA incluido
+                  {vipEligible ? 'IVA incluido · se confirma al registrar el pedido' : 'IVA incluido'}
                 </span>
               </div>
             </div>

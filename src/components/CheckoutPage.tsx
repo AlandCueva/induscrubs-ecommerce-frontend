@@ -28,7 +28,9 @@ import {
   validateReceiptFile,
   OrderSubmissionError,
   CreatePublicOrderPayload,
+  CreatePublicOrderResult,
 } from '../lib/orders';
+import { VIP_DISCOUNT_PERCENT, computeVipDiscount, useVipEligibility } from '../lib/vip';
 
 interface BankOption {
   id: string;
@@ -117,14 +119,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
-  const [orderResult, setOrderResult] = useState<{ orderNumber: string; total: number } | null>(null);
+  const [orderResult, setOrderResult] = useState<CreatePublicOrderResult | null>(null);
 
   const [copiedNumber, setCopiedNumber] = useState<boolean>(false);
+
+  // VIP preview. verify-and-create-order checks the order's email, so only
+  // preview the discount while the typed email is empty or matches the stored
+  // VIP email. This is an estimate; the confirmed total comes from the response.
+  const { email: vipEmail, eligible: vipEligible } = useVipEligibility();
+  const typedEmail = customerEmail.trim().toLowerCase();
+  const showVipPreview =
+    !orderResult && vipEligible && (typedEmail === '' || typedEmail === vipEmail);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
   const payphoneFee = paymentMethod === 'PayPhone' ? subtotal * 0.05 : 0;
   const shippingFee = shippingScope === 'Nacional' ? NATIONAL_SHIPPING_FEE : 0;
-  const total = subtotal + payphoneFee + shippingFee;
+  const vipDiscount = showVipPreview ? computeVipDiscount(subtotal) : 0;
+  const total = subtotal + payphoneFee + shippingFee - vipDiscount;
 
   const selectedBank = BANKS.find((b) => b.id === selectedBankId) || null;
 
@@ -369,6 +380,20 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                     <span>Número de pedido:</span>
                     <span className="font-semibold text-[#16232F]">{orderResult.orderNumber}</span>
                   </div>
+                  {orderResult.discount.applied && (
+                    <>
+                      <div className="flex justify-between text-xs text-[#5A6E85]">
+                        <span>Total sin descuento:</span>
+                        <span className="font-semibold text-[#16232F]">
+                          ${orderResult.originalTotal.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-[#2C63AE]">
+                        <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
+                        <span className="font-semibold">-${orderResult.discount.amount.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between text-xs text-[#5A6E85]">
                     <span>Total del pedido:</span>
                     <span className="font-bold text-[#2C63AE]">${orderResult.total.toFixed(2)}</span>
@@ -1074,16 +1099,38 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                                 </div>
                               </div>
 
-                              <div className="pt-3 border-t border-[#EAEFF4] flex items-center justify-between bg-[#F7F9FB] p-3.5 rounded-[6px] border border-[#EAEFF4]">
-                                <span className="text-xs sm:text-sm font-semibold text-[#16232F]">
-                                  Monto exacto a depositar:
-                                </span>
-                                <span
-                                  className="text-xl font-extrabold text-[#2C63AE]"
-                                  style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+                              <div className="pt-3 border-t border-[#EAEFF4] bg-[#F7F9FB] p-3.5 rounded-[6px] border border-[#EAEFF4] space-y-2">
+                                {/* This step only renders for Loja + Transferencia (no shipping or
+                                    PayPhone fee), so `subtotal` is the full pre-discount price here. */}
+                                {showVipPreview && (
+                                  <>
+                                    <div className="flex justify-between text-xs text-[#5A6E85]">
+                                      <span>Precio total:</span>
+                                      <span className="font-semibold text-[#16232F]">
+                                        ${subtotal.toFixed(2)}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-[#2C63AE]">
+                                      <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
+                                      <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
+                                    </div>
+                                  </>
+                                )}
+                                <div
+                                  className={`flex items-center justify-between ${
+                                    showVipPreview ? 'pt-2 border-t border-[#EAEFF4]' : ''
+                                  }`}
                                 >
-                                  ${total.toFixed(2)}
-                                </span>
+                                  <span className="text-xs sm:text-sm font-semibold text-[#16232F]">
+                                    Monto exacto a depositar:
+                                  </span>
+                                  <span
+                                    className="text-xl font-extrabold text-[#2C63AE]"
+                                    style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
+                                  >
+                                    ${total.toFixed(2)}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1299,6 +1346,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                   </div>
                 )}
 
+                {showVipPreview && (
+                  <div className="flex justify-between items-center text-[#2C63AE]">
+                    <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%</span>
+                    <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
                 {paymentMethod === 'PayPhone' && (
                   <div className="flex justify-between items-center text-[#2C63AE]">
                     <span>Recargo PayPhone (5%)</span>
@@ -1323,6 +1377,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                     <span className="block text-[10px] text-[#5A6E85]">IVA incluido</span>
                   </div>
                 </div>
+
+                {showVipPreview && (
+                  <p className="text-[10px] text-[#5A6E85] leading-snug">
+                    Total estimado con tu descuento VIP. El monto final se confirma al registrar el
+                    pedido con el mismo correo con el que te suscribiste.
+                  </p>
+                )}
               </div>
             </div>
           </div>

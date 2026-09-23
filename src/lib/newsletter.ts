@@ -1,3 +1,5 @@
+import { saveVipEmail } from './vip';
+
 const SUBSCRIBE_NEWSLETTER_URL =
   'https://kbyzijtrgzodmxqknsyp.supabase.co/functions/v1/subscribe-newsletter';
 
@@ -108,4 +110,6 @@ export async function subscribeToNewsletter(input: NewsletterSubscriptionInput):
     const message = json?.error || 'No se pudo completar la suscripción. Intenta de nuevo.';
     throw new NewsletterSubscriptionError(message, res.status);
   }
+
+  saveVipEmail(input.email);
 }

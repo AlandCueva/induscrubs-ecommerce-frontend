@@ -25,9 +25,18 @@ export interface CreatePublicOrderPayload {
   p_items: CreatePublicOrderItem[];
 }
 
+export interface OrderDiscount {
+  applied: boolean;
+  amount: number;
+}
+
+// Everything here comes from verify-and-create-order, which computes the VIP
+// discount server-side. `total` is what the customer actually pays.
 export interface CreatePublicOrderResult {
   orderNumber: string;
   total: number;
+  originalTotal: number;
+  discount: OrderDiscount;
 }
 
 export class OrderSubmissionError extends Error {
@@ -82,7 +91,13 @@ export async function submitPublicOrder(
     body: JSON.stringify({ turnstileToken, orderPayload }),
   });
 
-  let json: { error?: string; orderNumber?: string; total?: number } | null = null;
+  let json: {
+    error?: string;
+    orderNumber?: string;
+    total?: number;
+    originalTotal?: number;
+    discount?: { applied?: boolean; amount?: number };
+  } | null = null;
   try {
     json = await res.json();
   } catch {
@@ -98,5 +113,16 @@ export async function submitPublicOrder(
     throw new OrderSubmissionError('Respuesta inesperada del servidor.', 500);
   }
 
-  return { orderNumber: json.orderNumber, total: json.total ?? 0 };
+  const total = json.total ?? 0;
+  const discountApplied = json.discount?.applied === true;
+
+  return {
+    orderNumber: json.orderNumber,
+    total,
+    originalTotal: json.originalTotal ?? total,
+    discount: {
+      applied: discountApplied,
+      amount: discountApplied ? json.discount?.amount ?? 0 : 0,
+    },
+  };
 }
