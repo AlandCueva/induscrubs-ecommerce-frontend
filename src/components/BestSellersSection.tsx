@@ -60,7 +60,7 @@ export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> =
       {/* 2. Bottom row: product name on left, price in bold text on right (responsive for mobile 2-col & desktop) */}
       {/* No truncation: full product name always shows, wrapping to as many lines as it needs. */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-3 mt-2.5 sm:mt-4 text-[#16232F] font-bold leading-[105%] tracking-[-0.02em]">
-        <span className={`text-[13px] sm:text-[16px] md:text-[18px] ${isTitleHovered ? 'underline' : ''}`}>
+        <span className={`text-[16px] ${isTitleHovered ? 'underline' : ''}`}>
           {product.name}
         </span>
         <span className="flex items-baseline gap-1.5 shrink-0">

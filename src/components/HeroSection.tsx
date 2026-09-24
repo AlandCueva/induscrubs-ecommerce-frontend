@@ -56,7 +56,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
         <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
           {/* Main Display Heading */}
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FFFFFF] leading-[1.08] mb-4 sm:mb-6 text-center break-words">
-            Tú cuidas de otros, nosotros cuidamos de ti.
+            Tú cuidas de otros, nosotros cuidamos de TI.
           </h1>
 
           {/* Subtitle */}
