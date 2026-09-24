@@ -1,5 +1,72 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
+
+const SCRUBS_SOLD = 10000;
+const COUNT_DURATION_MS = 2000;
+
+const formatCount = (value: number) => value.toLocaleString('es-EC');
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const ScrubsSoldCounter: React.FC = () => {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [count, setCount] = useState(() =>
+    prefersReducedMotion() || typeof IntersectionObserver === 'undefined' ? SCRUBS_SOLD : 0
+  );
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+      setCount(SCRUBS_SOLD);
+      return;
+    }
+
+    let frameId = 0;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+
+        const start = performance.now();
+        const tick = (now: number) => {
+          const progress = Math.min((now - start) / COUNT_DURATION_MS, 1);
+          const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+          setCount(Math.round(eased * SCRUBS_SOLD));
+          if (progress < 1) frameId = requestAnimationFrame(tick);
+        };
+        frameId = requestAnimationFrame(tick);
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  return (
+    <p
+      ref={ref}
+      className="mt-4 sm:mt-5 text-center text-[#FFFFFF]"
+      style={{
+        fontFamily: "'Inter Variable', Inter, sans-serif",
+        fontWeight: 700,
+        fontSize: '20px',
+        lineHeight: '105%',
+        letterSpacing: '-0.02em',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      <span className="sr-only">+{formatCount(SCRUBS_SOLD)} scrubs vendidos</span>
+      <span aria-hidden="true">+{formatCount(count)} scrubs vendidos</span>
+    </p>
+  );
+};
 
 interface HeroSectionProps {
   onNavigateToCatalog: () => void;
@@ -73,6 +140,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
               <span className="min-w-0 text-center leading-snug">¿No sabes tu talla? ¡Nosotros te ayudamos!</span>
               <ArrowRight className="w-4 h-4 shrink-0" />
             </button>
+
+            {/* Social proof: scrubs sold counter */}
+            <ScrubsSoldCounter />
           </div>
         </div>
       </div>
