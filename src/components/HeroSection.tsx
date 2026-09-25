@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { SizeAdvisorModal } from './SizeAdvisorModal';
 
 const SCRUBS_SOLD = 10000;
 const COUNT_DURATION_MS = 2000;
@@ -76,6 +77,7 @@ interface HeroSectionProps {
 export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, onNavigate }) => {
   const videoSrc = 'https://ik.imagekit.io/fjlcsp6fz/Induscrubs/InduscrubsImages/herosection.mp4';
   const posterSrc = 'https://images.unsplash.com/photo-1594824813590-78965a31a980?auto=format&fit=crop&w=1600&q=80';
+  const [isSizeAdvisorOpen, setIsSizeAdvisorOpen] = useState(false);
 
   return (
     <section
@@ -131,10 +133,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
             Uniformes médicos pensados para quienes cuidan.
           </p>
 
-          {/* CTA: Size help (no action yet) */}
+          {/* CTA: opens the size advisor (Asesor de tallaje) */}
           <div className="w-full sm:w-auto flex flex-col items-center justify-center">
             <button
               type="button"
+              onClick={() => setIsSizeAdvisorOpen(true)}
+              aria-haspopup="dialog"
               className="w-full sm:w-auto max-w-full h-auto py-3 lg:h-12 lg:py-0 px-6 bg-[#84B8FF] hover:bg-[#6FA5ED] text-[#FFFFFF] text-sm font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
             >
               <span className="min-w-0 text-center leading-snug">¿No sabes tu talla? ¡Nosotros te ayudamos!</span>
@@ -146,6 +150,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
           </div>
         </div>
       </div>
+
+      <SizeAdvisorModal isOpen={isSizeAdvisorOpen} onClose={() => setIsSizeAdvisorOpen(false)} />
     </section>
   );
 };

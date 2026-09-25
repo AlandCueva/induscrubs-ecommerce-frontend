@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Ruler } from 'lucide-react';
 import { FavoriteButton } from './FavoriteButton';
 import { SIZE_ORDER as SIZES } from '../lib/products';
+import { SizeAdvisorModal } from './SizeAdvisorModal';
 
 const START_FRAME = 40;
 const END_FRAME = 96;
@@ -46,6 +47,7 @@ export const ScrollScrubSection: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [selectedSize, setSelectedSize] = useState<string>('M');
+  const [isSizeAdvisorOpen, setIsSizeAdvisorOpen] = useState<boolean>(false);
 
   // 1. Preload all 105 frames into memory (040 through 144)
   useEffect(() => {
@@ -395,6 +397,15 @@ export const ScrollScrubSection: React.FC = () => {
               <span>
                 Talla: <span className="text-[#2C63AE] font-bold">{selectedSize}</span>
               </span>
+              <button
+                type="button"
+                onClick={() => setIsSizeAdvisorOpen(true)}
+                aria-haspopup="dialog"
+                className="inline-flex items-center gap-1.5 text-[#2C63AE] font-semibold hover:underline cursor-pointer"
+              >
+                <Ruler className="w-3.5 h-3.5" />
+                Asesor de tallaje
+              </button>
             </div>
             <div className="flex flex-wrap gap-2">
               {SIZES.map((size) => (
@@ -500,6 +511,15 @@ export const ScrollScrubSection: React.FC = () => {
             <div className="mb-5">
               <div className="flex items-center justify-between text-xs font-semibold text-[#16232F] mb-2">
                 <span>Talla: <span className="text-[#2C63AE] font-bold">{selectedSize}</span></span>
+                <button
+                  type="button"
+                  onClick={() => setIsSizeAdvisorOpen(true)}
+                  aria-haspopup="dialog"
+                  className="inline-flex items-center gap-1.5 text-[#2C63AE] font-semibold hover:underline cursor-pointer"
+                >
+                  <Ruler className="w-3.5 h-3.5" />
+                  Asesor de tallaje
+                </button>
               </div>
               <div className="flex flex-wrap gap-1.5 lg:gap-2">
                 {SIZES.map((size) => (
@@ -651,6 +671,9 @@ export const ScrollScrubSection: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Grey's Anatomy has no size chart in the advisor, so the user picks the brand */}
+      <SizeAdvisorModal isOpen={isSizeAdvisorOpen} onClose={() => setIsSizeAdvisorOpen(false)} />
     </section>
   );
 };

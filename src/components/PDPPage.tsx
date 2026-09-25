@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Ruler } from 'lucide-react';
 import {
   Product,
   fetchProductById,
@@ -10,6 +10,8 @@ import {
 import { ProductCard } from './BestSellersSection';
 import { Section } from './Section';
 import { FavoriteButton } from './FavoriteButton';
+import { SizeAdvisorModal } from './SizeAdvisorModal';
+import { brandFromName } from '../data/sizeCharts';
 
 interface PDPPageProps {
   productId?: string;
@@ -34,6 +36,7 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
   const [quantity, setQuantity] = useState<number>(1);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [isLoadingRecommended, setIsLoadingRecommended] = useState<boolean>(false);
+  const [isSizeAdvisorOpen, setIsSizeAdvisorOpen] = useState<boolean>(false);
 
   // Hover-zoom lens (desktop only, additive on top of the existing gallery).
   const ZOOM_FACTOR = 2.5;
@@ -358,6 +361,15 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
                 <span>
                   Talla: <span className="text-[#2C63AE] font-bold">{selectedSize || '—'}</span>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSizeAdvisorOpen(true)}
+                  aria-haspopup="dialog"
+                  className="inline-flex items-center gap-1.5 text-[#2C63AE] font-semibold hover:underline cursor-pointer"
+                >
+                  <Ruler className="w-3.5 h-3.5" />
+                  Asesor de tallaje
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {sortedSizeCodes.map((size) => {
@@ -477,6 +489,13 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
           )}
         </Section>
       )}
+
+      {/* Brand preselected from the product when it has a size chart (skips the brand step) */}
+      <SizeAdvisorModal
+        isOpen={isSizeAdvisorOpen}
+        onClose={() => setIsSizeAdvisorOpen(false)}
+        initialBrand={brandFromName(product.brandName)}
+      />
     </main>
   );
 };
