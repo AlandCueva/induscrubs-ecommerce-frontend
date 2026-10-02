@@ -151,8 +151,8 @@ export default function App() {
             {/* 5. Marquee Section */}
             <MarqueeSection />
 
-            {/* 6. Scroll Scrub (Negro) Interactive Animation */}
-            <ScrollScrubSection />
+            {/* 6. Scroll Scrub (Negro) "Nuestro Best Seller" — temporarily hidden */}
+            {/* <ScrollScrubSection /> */}
 
             {/* 7. Compra por Categoría (2x2 Grid) */}
             <CategoryGridSection onNavigate={handleNavigate} />

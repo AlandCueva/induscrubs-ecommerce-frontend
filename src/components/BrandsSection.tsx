@@ -85,7 +85,7 @@ export const BrandsSection: React.FC<BrandsSectionProps> = ({ onNavigate }) => {
         {/* Carousel Scroll Track */}
         <div
           ref={scrollRef}
-          className="w-full flex items-center overflow-x-auto scroll-smooth snap-x snap-mandatory py-4 px-6 sm:px-10 gap-6 sm:gap-10 md:gap-14 lg:gap-16 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden justify-start md:justify-center"
+          className="w-full flex items-center overflow-x-auto scroll-smooth snap-x snap-mandatory py-4 px-6 sm:px-10 gap-6 sm:gap-10 md:gap-14 lg:gap-16 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden justify-start [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
         >
           {isLoading
             ? [0, 1, 2, 3].map((i) => (

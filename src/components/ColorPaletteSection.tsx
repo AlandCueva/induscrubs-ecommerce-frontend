@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Section } from './Section';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { fetchColorPaletteTiles, ColorPaletteTile } from '../lib/products';
 
 interface ColorPaletteSectionProps {
@@ -44,6 +44,9 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isJumpingRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
   useEffect(() => {
     fetchColorPaletteTiles()
@@ -147,6 +150,29 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
         }, 50);
       }
     }, 100);
+  };
+
+  const checkListScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    setCanScrollUp(el.scrollTop > 2);
+    setCanScrollDown(el.scrollTop < el.scrollHeight - el.clientHeight - 2);
+  }, []);
+
+  // Re-measure when the live tile list renders, and when the viewport changes the cap (md vs lg).
+  useEffect(() => {
+    checkListScroll();
+    window.addEventListener('resize', checkListScroll);
+    return () => window.removeEventListener('resize', checkListScroll);
+  }, [checkListScroll, isLoading, n]);
+
+  // One step = one card + the gap between cards (gap-3 = 12px).
+  const handleListStep = (direction: 'up' | 'down') => {
+    const el = listRef.current;
+    if (!el) return;
+    const firstCard = el.firstElementChild as HTMLElement | null;
+    const step = (firstCard?.offsetHeight ?? 94) + 12;
+    el.scrollBy({ top: direction === 'up' ? -step : step, behavior: 'smooth' });
   };
 
   if (!isLoading && n === 0) {
@@ -301,7 +327,24 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
             </div>
 
             {/* Right Pane (Fixed width ~340px): Vertical list of all colors with matching portrait thumbnails */}
-            <div className="w-[320px] lg:w-[350px] shrink-0 flex flex-col gap-3">
+            <div className="w-[320px] lg:w-[350px] shrink-0 flex flex-col gap-2">
+              {(canScrollUp || canScrollDown) && (
+                <button
+                  type="button"
+                  onClick={() => handleListStep('up')}
+                  disabled={!canScrollUp}
+                  className="w-full h-8 rounded-[8px] border border-[#DDE3EA] bg-[#FFFFFF] hover:border-[#5B6B7A]/40 text-[#16232F] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default focus-visible:ring-2 focus-visible:ring-[#2C63AE]"
+                  aria-label="Ver colores anteriores"
+                >
+                  <ChevronUp className="w-5 h-5" />
+                </button>
+              )}
+              {/* Capped to 5 cards (md: 524px, lg: 574px = 5 cards + 4 gaps + 4px ring-safe padding); scrolls beyond that */}
+              <div
+                ref={listRef}
+                onScroll={checkListScroll}
+                className="flex flex-col gap-3 p-0.5 max-h-[524px] lg:max-h-[574px] overflow-y-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              >
               {tiles.map((tile, idx) => {
                 const isSelected = selectedIndex === idx;
                 return (
@@ -339,6 +382,18 @@ export const ColorPaletteSection: React.FC<ColorPaletteSectionProps> = ({ onNavi
                   </button>
                 );
               })}
+              </div>
+              {(canScrollUp || canScrollDown) && (
+                <button
+                  type="button"
+                  onClick={() => handleListStep('down')}
+                  disabled={!canScrollDown}
+                  className="w-full h-8 rounded-[8px] border border-[#DDE3EA] bg-[#FFFFFF] hover:border-[#5B6B7A]/40 text-[#16232F] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default focus-visible:ring-2 focus-visible:ring-[#2C63AE]"
+                  aria-label="Ver más colores"
+                >
+                  <ChevronDown className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
 
