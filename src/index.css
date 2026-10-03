@@ -102,6 +102,21 @@ body {
   outline-offset: 2px;
 }
 
+/* Announcement bar marquee: track holds two identical halves, so -50% loops seamlessly */
+@keyframes announcementScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.announcement-marquee {
+  display: flex;
+  width: max-content;
+  animation: announcementScroll 40s linear infinite;
+}
+
 /* Accessibility: Prefers-reduced-motion disabling all motion */
 @media (prefers-reduced-motion: reduce) {
   *,

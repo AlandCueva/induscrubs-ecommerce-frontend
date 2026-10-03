@@ -30,13 +30,21 @@ export async function fetchBrandPromotions(): Promise<BrandPromotion[]> {
 // One request per page load, shared by the PDP, home banner, cart drawer and
 // checkout. A failed request is not pinned, so the next mount can retry.
 let promotionsRequest: Promise<BrandPromotion[]> | null = null;
+// Last successful result, so components mounted later (product cards, carousel
+// clones) render the promo on first paint instead of flashing in.
+let cachedPromotions: BrandPromotion[] | null = null;
 
 function loadBrandPromotions(): Promise<BrandPromotion[]> {
   if (!promotionsRequest) {
-    promotionsRequest = fetchBrandPromotions().catch((err) => {
-      promotionsRequest = null;
-      throw err;
-    });
+    promotionsRequest = fetchBrandPromotions()
+      .then((rows) => {
+        cachedPromotions = rows;
+        return rows;
+      })
+      .catch((err) => {
+        promotionsRequest = null;
+        throw err;
+      });
   }
   return promotionsRequest;
 }
@@ -44,8 +52,8 @@ function loadBrandPromotions(): Promise<BrandPromotion[]> {
 // Any failure resolves to "no promotions", so a broken fetch only hides the
 // promo and never affects browsing or checkout.
 export function useBrandPromotions(): { promotions: BrandPromotion[]; isLoading: boolean } {
-  const [promotions, setPromotions] = useState<BrandPromotion[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [promotions, setPromotions] = useState<BrandPromotion[]>(cachedPromotions ?? []);
+  const [isLoading, setIsLoading] = useState<boolean>(cachedPromotions === null);
 
   useEffect(() => {
     let cancelled = false;

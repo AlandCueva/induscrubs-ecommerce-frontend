@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { Section } from './Section';
 import { FavoriteButton } from './FavoriteButton';
 import { Product, fetchProducts, getDiscountBadgeLabel } from '../lib/products';
+import { useBrandPromotions } from '../lib/brandPromotions';
+import { findPromoForBrand, formatPromoPrice } from '../lib/calcBrandPromo';
 
 export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> = ({
   product,
@@ -14,6 +16,8 @@ export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> =
   // only one image simply have no hover target, so hovering is a no-op.
   const hoverImage = product.images.filter((img) => img.colorId === mainImage?.colorId)[1];
   const discountBadge = getDiscountBadgeLabel(product);
+  const { promotions } = useBrandPromotions();
+  const brandPromo = findPromoForBrand(promotions, product.brandId);
 
   // Title underline is driven by a real mouseenter/mouseleave DOM event into
   // React state, not a CSS `:hover`/`group-hover` variant — this was rebuilt
@@ -74,6 +78,14 @@ export const ProductCard: React.FC<{ product: Product; onClick?: () => void }> =
           </span>
         </span>
       </div>
+
+      {/* Brand combo promo (brand_promotions); the discount itself is applied in the cart */}
+      {brandPromo && (
+        <span className="self-start inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-[4px] bg-[#F2F7FF] border border-[#84B8FF]/40 text-[#2C63AE] text-[11px] sm:text-xs font-semibold leading-none">
+          <Tag className="w-3 h-3 shrink-0" aria-hidden="true" />
+          2 x {formatPromoPrice(brandPromo.pairPrice)} · 1 x {formatPromoPrice(brandPromo.singleItemPrice)}
+        </span>
+      )}
 
       {/* 3. Color swatch dots reflecting this product's real available colors */}
       {product.colors.length > 0 && (

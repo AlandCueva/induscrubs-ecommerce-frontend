@@ -3,7 +3,6 @@ import { Header } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { HeroSection } from './components/HeroSection';
 import { BrandsSection } from './components/BrandsSection';
-import { BrandPromoSection } from './components/BrandPromoSection';
 import { ColorPaletteSection } from './components/ColorPaletteSection';
 import { MarqueeSection } from './components/MarqueeSection';
 import { ScrollScrubSection } from './components/ScrollScrubSection';
@@ -142,9 +141,6 @@ export default function App() {
 
             {/* 2. Nuestras Marcas */}
             <BrandsSection onNavigate={handleNavigate} />
-
-            {/* 2b. Promo combo por marca (brand_promotions) */}
-            <BrandPromoSection onNavigate={handleNavigate} />
 
             {/* Marquee Section */}
             <MarqueeSection />

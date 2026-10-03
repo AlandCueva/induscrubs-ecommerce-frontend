@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { STORE_INFO } from '../data/products';
 import { ShoppingBag, Search, Menu, X, MessageCircle, MapPin, Heart } from 'lucide-react';
 import { useFavoriteIds } from '../lib/favorites';
+import { useBrandPromotions } from '../lib/brandPromotions';
+import { formatPromoPrice } from '../lib/calcBrandPromo';
 
 interface HeaderProps {
   currentView: string;
@@ -56,6 +58,26 @@ export const Header: React.FC<HeaderProps> = ({
       }
     }
   };
+
+  // Announcement marquee: shipping messages plus one promo message per price
+  // tier (brands sharing the same prices are listed together).
+  const { promotions } = useBrandPromotions();
+  const promoTiers = new Map<string, { single: number; pair: number; brands: string[] }>();
+  for (const promo of promotions) {
+    const key = `${promo.singleItemPrice}|${promo.pairPrice}`;
+    const tier = promoTiers.get(key) ?? { single: promo.singleItemPrice, pair: promo.pairPrice, brands: [] };
+    tier.brands.push(promo.brandName);
+    promoTiers.set(key, tier);
+  }
+  const announcementItems = [
+    { key: 'free-loja', text: '¡ENVÍOS GRATIS EN TODO LOJA!', highlight: true },
+    { key: 'servientrega', text: 'Envíos a todo el Ecuador por Servientrega', highlight: false },
+    ...[...promoTiers.entries()].map(([key, tier]) => ({
+      key: `promo-${key}`,
+      text: `PROMO COMBO: 2 x ${formatPromoPrice(tier.pair)} · 1 x ${formatPromoPrice(tier.single)} en ${tier.brands.join(', ')}`,
+      highlight: true,
+    })),
+  ];
 
   // Nav links: Mujer, Hombre, Scrubs, Marcas, Colección, Locaciones
   const navLinks: NavLink[] = [
@@ -153,17 +175,35 @@ export const Header: React.FC<HeaderProps> = ({
       <div
         id="announcement-bar"
         ref={announcementRef}
-        className="w-full bg-[#16232F] text-[#FFFFFF] py-2 px-4 text-center border-b border-[#DDE3EA]/20 relative z-20 m-0"
+        className="w-full bg-[#16232F] text-[#FFFFFF] py-2 border-b border-[#DDE3EA]/20 relative z-20 m-0 overflow-hidden select-none"
       >
-        <div className="max-container flex items-center justify-center gap-2">
-          <MapPin className="w-3.5 h-3.5 text-[#84B8FF] shrink-0" aria-hidden="true" />
-          <span className="type-micro tracking-widest font-semibold text-[#84B8FF]">
-            ¡ENVÍOS GRATIS EN TODO LOJA!
-          </span>
-          <span className="hidden sm:inline text-[#DDE3EA]/60 text-xs">|</span>
-          <span className="hidden sm:inline text-xs text-[#DDE3EA]">
-            Envíos a todo el Ecuador por Servientrega
-          </span>
+        {/* Two identical halves so the -50% scroll loops without a jump */}
+        <div className="announcement-marquee items-center whitespace-nowrap">
+          {[0, 1].map((half) => (
+            <div key={half} className="flex items-center shrink-0" aria-hidden={half === 1}>
+              {[0, 1, 2, 3].flatMap((rep) =>
+                announcementItems.map((item) => (
+                  <React.Fragment key={`${rep}-${item.key}`}>
+                    <span className="flex items-center gap-2 mx-5">
+                      {item.highlight ? (
+                        <>
+                          <MapPin className="w-3.5 h-3.5 text-[#84B8FF] shrink-0" aria-hidden="true" />
+                          <span className="type-micro tracking-widest font-semibold text-[#84B8FF]">
+                            {item.text}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-[#DDE3EA]">{item.text}</span>
+                      )}
+                    </span>
+                    <span className="text-[#DDE3EA]/40 text-xs" aria-hidden="true">
+                      •
+                    </span>
+                  </React.Fragment>
+                ))
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
