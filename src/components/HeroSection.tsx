@@ -124,14 +124,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToCatalog, o
       <div className="relative z-10 max-container w-full pt-16 sm:pt-20 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
         <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
           {/* Main Display Heading */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FFFFFF] leading-[1.08] mb-4 sm:mb-6 text-center break-words">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FFFFFF] leading-[1.08] mb-8 sm:mb-10 text-center break-words">
             Tú cuidas de otros, nosotros cuidamos de TI.
           </h1>
-
-          {/* Subtitle */}
-          <p className="text-base sm:text-lg md:text-xl text-[#F2F7FF] max-w-xl mx-auto mb-8 sm:mb-10 text-center font-normal leading-relaxed">
-            Uniformes médicos pensados para quienes cuidan.
-          </p>
 
           {/* CTA: opens the size advisor (Asesor de tallaje) */}
           <div className="w-full sm:w-auto flex flex-col items-center justify-center">
