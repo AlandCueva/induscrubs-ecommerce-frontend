@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { calcPromoAmount, type PromoLine, type PromoResult, type PromoRow } from "./promo.ts";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -29,22 +30,81 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-type VipDiscountResult = { applied: boolean; amount: number; total?: number };
+type DiscountOutcome = {
+  // Full-price items subtotal (before any discount), null if the order couldn't be loaded.
+  subtotal: number | null;
+  promo: { applied: boolean; amount: number; units: number; brands: string[] };
+  vip: { applied: boolean; amount: number };
+  // Persisted orders.total after discounts; only set when something was applied.
+  total?: number;
+};
 
-// VIP discount: 10% off the subtotal (items only, not shipping) when the
-// order's email has a non-expired, unredeemed row in vip_subscribers.
-// The amount is derived from the order row the RPC just created, never from
-// anything the client sent. Any failure or unmet condition returns
-// { applied: false } so checkout is never blocked by the discount.
-async function applyVipDiscount(
-  supabaseUrl: string,
-  orderNumber: string,
-): Promise<VipDiscountResult & { subtotal: number | null }> {
-  const none = { applied: false, amount: 0, subtotal: null as number | null };
+const NO_PROMO = { applied: false, amount: 0, units: 0, brands: [] as string[] };
+const NO_VIP = { applied: false, amount: 0 };
+
+type AdminClient = ReturnType<typeof createClient>;
+
+// Brand combo promo, derived from the persisted order lines + active
+// brand_promotions rows (nothing comes from the request). Any failure returns
+// "no promo" so checkout is never blocked by the discount.
+async function computeBrandPromo(admin: AdminClient, orderId: string): Promise<PromoResult> {
+  const none: PromoResult = { amount: 0, units: 0, brands: [] };
+  try {
+    const [{ data: items, error: itemsErr }, { data: promoRows, error: promoErr }] = await Promise.all([
+      admin
+        .from("order_items")
+        .select("quantity, unit_price_snapshot, product_variants ( products ( brand_id ) )")
+        .eq("order_id", orderId),
+      admin.from("brand_promotions").select("brand_id, brand, single_item_price, pair_price").eq("active", true),
+    ]);
+
+    if (itemsErr || promoErr) {
+      console.error("verify-and-create-order: could not load data for brand promo.", itemsErr ?? promoErr);
+      return none;
+    }
+    if (!items || !promoRows || promoRows.length === 0) return none;
+
+    const promos: PromoRow[] = promoRows.map((r: Record<string, unknown>) => ({
+      brandId: String(r.brand_id),
+      brand: String(r.brand),
+      singleItemPrice: Number(r.single_item_price),
+      pairPrice: Number(r.pair_price),
+    }));
+
+    // The embedded rows are to-one relations (object), but tolerate an array.
+    const first = <T>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+    const lines: PromoLine[] = items.map((it: Record<string, unknown>) => {
+      const variant = first(it.product_variants as Record<string, unknown> | Record<string, unknown>[] | null);
+      const product = first(variant?.products as Record<string, unknown> | Record<string, unknown>[] | null);
+      return {
+        brandId: (product?.brand_id as string | null | undefined) ?? null,
+        quantity: Number(it.quantity),
+        unitPrice: Number(it.unit_price_snapshot),
+      };
+    });
+
+    return calcPromoAmount(lines, promos);
+  } catch (err) {
+    console.error("verify-and-create-order: brand promo calculation failed unexpectedly.", err);
+    return none;
+  }
+}
+
+// Discounts on the items subtotal (never shipping), applied in this order:
+//   1. Brand combo promo (brand_promotions).
+//   2. VIP 10% on what is left after the promo, when the order's email has a
+//      non-expired, unredeemed row in vip_subscribers.
+// Both are persisted together in orders.discount_amount; trg_enforce_order_total
+// recomputes orders.total as items + shipping - discount_amount. Amounts are
+// derived from the order row the RPC just created, never from anything the
+// client sent. Any failure or unmet condition returns "not applied" so
+// checkout is never blocked by a discount.
+async function applyOrderDiscounts(supabaseUrl: string, orderNumber: string): Promise<DiscountOutcome> {
+  const none: DiscountOutcome = { subtotal: null, promo: NO_PROMO, vip: NO_VIP };
 
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceKey) {
-    console.error("verify-and-create-order: SUPABASE_SERVICE_ROLE_KEY not available; skipping VIP discount.");
+    console.error("verify-and-create-order: SUPABASE_SERVICE_ROLE_KEY not available; skipping discounts.");
     return none;
   }
 
@@ -60,7 +120,7 @@ async function applyVipDiscount(
       .single();
 
     if (orderErr || !order) {
-      console.error("verify-and-create-order: could not load new order for VIP check.", orderErr);
+      console.error("verify-and-create-order: could not load new order for discounts.", orderErr);
       return none;
     }
 
@@ -68,59 +128,79 @@ async function applyVipDiscount(
     // trigger; discount_amount is 0 on a fresh order), so the subtotal is
     // derived server-side from the persisted order.
     const subtotal = roundCents(Number(order.total) - Number(order.shipping_fee));
+    if (subtotal <= 0) return { ...none, subtotal };
+
+    const promoResult = await computeBrandPromo(admin, order.id);
+    const promoAmount = roundCents(promoResult.amount);
+    const subtotalAfterPromo = roundCents(subtotal - promoAmount);
+
+    // VIP: atomic check-and-redeem. A single UPDATE whose WHERE clause carries
+    // every condition (unredeemed, unexpired). Postgres row-locks the matching
+    // row and re-evaluates the WHERE after a concurrent transaction commits, so
+    // of N simultaneous requests exactly one gets a row back; the rest get zero.
     const email = String(order.customer_email).trim();
-    if (!email || subtotal <= 0) return { ...none, subtotal };
+    let vipClaimed = false;
+    if (email && subtotalAfterPromo > 0) {
+      const nowIso = new Date().toISOString();
+      const { data: claimed, error: claimErr } = await admin
+        .from("vip_subscribers")
+        .update({ redeemed_at: nowIso, redeemed_order_id: order.id })
+        .ilike("email", escapeLike(email))
+        .is("redeemed_at", null)
+        .gt("expires_at", nowIso)
+        .select("id");
 
-    // Atomic check-and-redeem: a single UPDATE whose WHERE clause carries every
-    // condition (unredeemed, unexpired). Postgres row-locks the matching row and
-    // re-evaluates the WHERE after a concurrent transaction commits, so of N
-    // simultaneous requests exactly one gets a row back; the rest get zero rows.
-    const nowIso = new Date().toISOString();
-    const { data: claimed, error: claimErr } = await admin
-      .from("vip_subscribers")
-      .update({ redeemed_at: nowIso, redeemed_order_id: order.id })
-      .ilike("email", escapeLike(email))
-      .is("redeemed_at", null)
-      .gt("expires_at", nowIso)
-      .select("id");
-
-    if (claimErr) {
-      console.error("verify-and-create-order: VIP redeem update failed.", claimErr);
-      return { ...none, subtotal };
+      if (claimErr) {
+        console.error("verify-and-create-order: VIP redeem update failed.", claimErr);
+      } else {
+        vipClaimed = Boolean(claimed && claimed.length > 0);
+      }
     }
 
-    if (!claimed || claimed.length === 0) return { ...none, subtotal };
+    const vipAmount = vipClaimed ? roundCents(subtotalAfterPromo * VIP_DISCOUNT_RATE) : 0;
+    const totalDiscount = roundCents(promoAmount + vipAmount);
+    if (totalDiscount <= 0) return { ...none, subtotal };
 
-    // Persist the discount. This UPDATE fires trg_enforce_order_total, which
-    // recomputes orders.total as items + shipping - discount_amount.
-    const amount = roundCents(subtotal * VIP_DISCOUNT_RATE);
+    // Persist. This UPDATE fires trg_enforce_order_total.
     const { data: updated, error: persistErr } = await admin
       .from("orders")
-      .update({ discount_amount: amount })
+      .update({ discount_amount: totalDiscount })
       .eq("id", order.id)
       .select("total")
       .single();
 
     if (persistErr || !updated) {
-      // The order would stay at full price, so give the coupon back rather than
-      // burn it without a discount, and report no discount.
-      console.error("verify-and-create-order: failed to persist VIP discount; releasing redemption.", persistErr);
-      const { error: releaseErr } = await admin
-        .from("vip_subscribers")
-        .update({ redeemed_at: null, redeemed_order_id: null })
-        .eq("redeemed_order_id", order.id);
-      if (releaseErr) {
-        console.error(
-          `verify-and-create-order: could not release VIP redemption for order ${orderNumber}; fix manually.`,
-          releaseErr,
-        );
+      // The order would stay at full price, so give the VIP coupon back rather
+      // than burn it without a discount, and report no discounts.
+      console.error("verify-and-create-order: failed to persist discounts; releasing VIP redemption.", persistErr);
+      if (vipClaimed) {
+        const { error: releaseErr } = await admin
+          .from("vip_subscribers")
+          .update({ redeemed_at: null, redeemed_order_id: null })
+          .eq("redeemed_order_id", order.id);
+        if (releaseErr) {
+          console.error(
+            `verify-and-create-order: could not release VIP redemption for order ${orderNumber}; fix manually.`,
+            releaseErr,
+          );
+        }
       }
       return { ...none, subtotal };
     }
 
-    return { applied: true, amount, subtotal, total: roundCents(Number(updated.total)) };
+    return {
+      subtotal,
+      promo: {
+        applied: promoAmount > 0,
+        amount: promoAmount,
+        units: promoAmount > 0 ? promoResult.units : 0,
+        brands: promoAmount > 0 ? promoResult.brands : [],
+      },
+      vip: { applied: vipClaimed, amount: vipAmount },
+      total: roundCents(Number(updated.total)),
+    };
   } catch (err) {
-    console.error("verify-and-create-order: VIP discount check failed unexpectedly.", err);
+    console.error("verify-and-create-order: discount calculation failed unexpectedly.", err);
     return none;
   }
 }
@@ -244,30 +324,31 @@ Deno.serve(async (req: Request) => {
   const orderNumber: string | null = row?.order_number ?? null;
   const orderTotal = row?.total != null ? Number(row.total) : null;
 
-  // 3. VIP discount. Runs after the order exists because vip_subscribers
-  // .redeemed_order_id references orders(id). The discount is computed here
-  // (server-side) — nothing about it is read from the request.
-  let discount: VipDiscountResult = { applied: false, amount: 0 };
-  let subtotal: number | null = null;
+  // 3. Discounts: brand combo promo, then VIP. Runs after the order exists
+  // because vip_subscribers.redeemed_order_id references orders(id). Both are
+  // computed here (server-side) — nothing about them is read from the request.
+  let outcome: DiscountOutcome = { subtotal: null, promo: NO_PROMO, vip: NO_VIP };
   if (orderNumber && orderTotal !== null) {
-    const vip = await applyVipDiscount(supabaseUrl, orderNumber);
-    discount = { applied: vip.applied, amount: vip.amount, total: vip.total };
-    subtotal = vip.subtotal;
+    outcome = await applyOrderDiscounts(supabaseUrl, orderNumber);
   }
 
   return jsonResponse(
     {
       orderNumber,
       // Amount the customer actually pays: the persisted orders.total, which
-      // already has any VIP discount subtracted by trg_enforce_order_total.
-      total: discount.total ?? orderTotal,
+      // already has the promo and any VIP discount subtracted by
+      // trg_enforce_order_total.
+      total: outcome.total ?? orderTotal,
+      // Order total at full price (before promo and VIP).
       originalTotal: orderTotal,
-      subtotal,
+      subtotal: outcome.subtotal,
+      // VIP only (shape unchanged); the promo is reported separately below.
       discount: {
-        applied: discount.applied,
-        amount: discount.amount,
-        ...(discount.applied ? { type: "vip", percent: VIP_DISCOUNT_RATE * 100 } : {}),
+        applied: outcome.vip.applied,
+        amount: outcome.vip.amount,
+        ...(outcome.vip.applied ? { type: "vip", percent: VIP_DISCOUNT_RATE * 100 } : {}),
       },
+      promo: outcome.promo,
     },
     200,
     origin,

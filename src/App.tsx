@@ -3,6 +3,7 @@ import { Header } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { HeroSection } from './components/HeroSection';
 import { BrandsSection } from './components/BrandsSection';
+import { BrandPromoSection } from './components/BrandPromoSection';
 import { ColorPaletteSection } from './components/ColorPaletteSection';
 import { MarqueeSection } from './components/MarqueeSection';
 import { ScrollScrubSection } from './components/ScrollScrubSection';
@@ -18,13 +19,13 @@ import { CartDrawer } from './components/CartDrawer';
 import { SearchOverlay } from './components/SearchOverlay';
 import { FavoritesPage } from './components/FavoritesPage';
 import { VipPopup } from './components/VipPopup';
-import { CartItem } from './types';
-
-type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites';
+import { LegalPage } from './components/LegalPage';
+import { AppView, CartItem } from './types';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('home');
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>();
+  const [legalSlug, setLegalSlug] = useState<string | undefined>();
   const [initialFilter, setInitialFilter] = useState<any>(undefined);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
@@ -38,6 +39,7 @@ export default function App() {
     price: number;
     image?: string;
     colorId?: string;
+    brandId?: string | null;
     qty?: number;
   }) => {
     const addQty = item.qty && item.qty > 0 ? item.qty : 1;
@@ -62,6 +64,7 @@ export default function App() {
         name: item.name,
         size: item.size,
         colorId: item.colorId,
+        brandId: item.brandId,
         price: item.price,
         qty: addQty,
         image: item.image,
@@ -98,7 +101,12 @@ export default function App() {
   // Navigation handlers
   const handleNavigate = (view: AppView, extra?: any) => {
     setCurrentView(view);
-    if (typeof extra === 'string') {
+    if (view === 'legal') {
+      // extra is the legal page slug, not a product id
+      setLegalSlug(typeof extra === 'string' ? extra : undefined);
+      setInitialFilter(undefined);
+      setSelectedProductId(undefined);
+    } else if (typeof extra === 'string') {
       setSelectedProductId(extra);
       setInitialFilter(undefined);
     } else if (extra && typeof extra === 'object') {
@@ -134,6 +142,9 @@ export default function App() {
 
             {/* 2. Nuestras Marcas */}
             <BrandsSection onNavigate={handleNavigate} />
+
+            {/* 2b. Promo combo por marca (brand_promotions) */}
+            <BrandPromoSection onNavigate={handleNavigate} />
 
             {/* Marquee Section */}
             <MarqueeSection />
@@ -192,6 +203,8 @@ export default function App() {
         )}
 
         {currentView === 'favorites' && <FavoritesPage onNavigate={handleNavigate} />}
+
+        {currentView === 'legal' && <LegalPage slug={legalSlug} onNavigate={handleNavigate} />}
       </div>
 
       {/* Global Footer (Instagram ONLY — no email, no Facebook) */}

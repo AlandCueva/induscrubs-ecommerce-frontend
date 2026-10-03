@@ -3,19 +3,21 @@ import { Logo } from './Logo';
 import { STORE_INFO } from '../data/products';
 import { Instagram, MapPin, Phone, ShieldCheck, ArrowUpRight } from 'lucide-react';
 import { VipSignupForm } from './VipSignupForm';
+import { AppView } from '../types';
+import { LegalSlug } from '../data/legalPages';
 
 interface FooterProps {
-  onNavigate?: (view: 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b', extra?: any) => void;
+  onNavigate?: (view: AppView, extra?: any) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
-  const policyLinks = [
-    'Términos y Condiciones de Venta',
-    'Política de Devoluciones y Reembolsos',
-    'Política de Privacidad',
-    'Política de Cookies',
-    'Aviso Legal',
-    'Políticas de Envío y Entrega',
+  const policyLinks: { label: string; slug: LegalSlug }[] = [
+    { label: 'Términos y Condiciones de Venta', slug: 'terminos' },
+    { label: 'Política de Devoluciones y Reembolsos', slug: 'devoluciones' },
+    { label: 'Política de Privacidad', slug: 'privacidad' },
+    { label: 'Política de Cookies', slug: 'cookies' },
+    { label: 'Aviso Legal', slug: 'aviso-legal' },
+    { label: 'Políticas de Envío y Entrega', slug: 'envios' },
   ];
 
   return (
@@ -147,21 +149,21 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Legal (placeholder links, no routes yet) — full-width horizontal row */}
+        {/* Legal — full-width horizontal row */}
         <div className="pt-6 space-y-3">
           <h4 className="type-micro text-[#FFFFFF] font-bold tracking-widest uppercase">
             Legal
           </h4>
           <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-[#FFFFFF]/80">
-            {policyLinks.map((label) => (
-              <li key={label}>
-                <a
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  className="hover:text-[#FFFFFF] hover:underline transition-colors"
+            {policyLinks.map(({ label, slug }) => (
+              <li key={slug}>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('legal', slug)}
+                  className="hover:text-[#FFFFFF] hover:underline transition-colors text-left cursor-pointer"
                 >
                   {label}
-                </a>
+                </button>
               </li>
             ))}
           </ul>

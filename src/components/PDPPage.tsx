@@ -12,6 +12,8 @@ import { Section } from './Section';
 import { FavoriteButton } from './FavoriteButton';
 import { SizeAdvisorModal } from './SizeAdvisorModal';
 import { brandFromName } from '../data/sizeCharts';
+import { useBrandPromotions } from '../lib/brandPromotions';
+import { findPromoForBrand, formatPromoPrice } from '../lib/calcBrandPromo';
 
 interface PDPPageProps {
   productId?: string;
@@ -23,6 +25,7 @@ interface PDPPageProps {
     price: number;
     image?: string;
     colorId?: string;
+    brandId?: string | null;
     qty: number;
   }) => void;
 }
@@ -37,6 +40,7 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [isLoadingRecommended, setIsLoadingRecommended] = useState<boolean>(false);
   const [isSizeAdvisorOpen, setIsSizeAdvisorOpen] = useState<boolean>(false);
+  const { promotions } = useBrandPromotions();
 
   // Hover-zoom lens (desktop only, additive on top of the existing gallery).
   const ZOOM_FACTOR = 2.5;
@@ -169,6 +173,7 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
       price: product.finalPrice,
       image: activeImage?.url,
       colorId: selectedColorId,
+      brandId: product.brandId,
       qty: quantity,
     });
   };
@@ -209,6 +214,7 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
   }
 
   const discountBadge = getDiscountBadgeLabel(product);
+  const brandPromo = findPromoForBrand(promotions, product.brandId);
 
   return (
     <main id="pdp-content" className="w-full bg-[#FFFFFF] py-6 sm:py-10 md:py-12">
@@ -319,6 +325,18 @@ export const PDPPage: React.FC<PDPPageProps> = ({ productId, onNavigate, onAddTo
               </span>
               <span className="text-xs font-medium text-[#5A6E85]">IVA incluido</span>
             </div>
+
+            {/* Brand combo promo (brand_promotions): applied in the cart */}
+            {brandPromo && (
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-[#2C63AE]">
+                  {formatPromoPrice(brandPromo.singleItemPrice)} c/u · 2 x {formatPromoPrice(brandPromo.pairPrice)}
+                </p>
+                <p className="text-xs text-[#5A6E85] mt-0.5">
+                  Promo combo {brandPromo.brandName}. Se aplica en el carrito.
+                </p>
+              </div>
+            )}
 
             {/* Description Copy */}
             <p className="text-sm text-[#5A6E85] leading-relaxed mb-6">{product.description}</p>

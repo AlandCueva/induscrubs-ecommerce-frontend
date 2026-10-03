@@ -112,7 +112,14 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigate, initialFil
 
     if (!initialFilter) return;
 
-    if (initialFilter.filterType === 'brand' && initialFilter.value) {
+    if (initialFilter.filterType === 'brand' && Array.isArray(initialFilter.value)) {
+      // Several brands at once (e.g. the home brand-promo banner), by id or name.
+      const wanted = (initialFilter.value as unknown[]).map((v) => String(v).toLowerCase());
+      const ids = brands
+        .filter((b) => wanted.includes(b.id.toLowerCase()) || wanted.includes(b.name.toLowerCase()))
+        .map((b) => b.id);
+      if (ids.length > 0) setSelectedBrands(ids);
+    } else if (initialFilter.filterType === 'brand' && initialFilter.value) {
       const match = brands.find(
         (b) => b.name.toLowerCase() === String(initialFilter.value).toLowerCase() || b.id === initialFilter.value
       );

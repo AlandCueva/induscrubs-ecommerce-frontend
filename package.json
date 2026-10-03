@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "node --test src/lib/recommendSize.test.ts"
+    "test": "node --test src/lib/recommendSize.test.ts src/lib/calcBrandPromo.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

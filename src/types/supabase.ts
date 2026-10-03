@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_promotions: {
+        Row: {
+          active: boolean
+          brand: string
+          brand_id: string
+          created_at: string
+          id: string
+          pair_price: number
+          single_item_price: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          brand: string
+          brand_id: string
+          created_at?: string
+          id?: string
+          pair_price: number
+          single_item_price: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          brand?: string
+          brand_id?: string
+          created_at?: string
+          id?: string
+          pair_price?: number
+          single_item_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_promotions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brands: {
         Row: {
           created_at: string

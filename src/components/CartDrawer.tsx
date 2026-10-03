@@ -2,6 +2,9 @@ import React, { useEffect } from 'react';
 import { X, Plus, Minus, Trash2, ShoppingBag, Truck } from 'lucide-react';
 import { CartItem } from '../types';
 import { VIP_DISCOUNT_PERCENT, computeVipDiscount, useVipEligibility } from '../lib/vip';
+import { useBrandPromotions } from '../lib/brandPromotions';
+import { calcBrandPromo } from '../lib/calcBrandPromo';
+import { BrandPromoLine } from './BrandPromoLine';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -42,9 +45,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   }, [isOpen, onClose]);
 
   const totalItemCount = items.reduce((sum, item) => sum + item.qty, 0);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const { promotions } = useBrandPromotions();
+  const pricing = calcBrandPromo(items, promotions);
+  const hasPromo = pricing.groups.length > 0;
+  // VIP applies on top of the promo-adjusted subtotal (preview only).
+  const subtotal = pricing.subtotal;
   const { eligible: vipEligible } = useVipEligibility();
   const vipDiscount = vipEligible ? computeVipDiscount(subtotal) : 0;
+  const showBreakdown = hasPromo || vipEligible;
 
   return (
     <div
@@ -219,17 +227,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </span>
             </div>
 
-            {/* VIP preview (client-side estimate; the order response has the real total) */}
-            {vipEligible && (
+            {/* Brand combo promo: one grouped line per promo tier, with savings */}
+            {pricing.groups.map((group) => (
+              <BrandPromoLine key={`${group.singleItemPrice}|${group.pairPrice}`} group={group} compact />
+            ))}
+
+            {/* Promo / VIP breakdown (client-side estimate; the order response has the real total) */}
+            {showBreakdown && (
               <div className="space-y-1.5 text-xs text-[#5A6E85]">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-semibold text-[#16232F]">${subtotal.toFixed(2)}</span>
+                  <span className="font-semibold text-[#16232F]">${pricing.regularSubtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-[#2C63AE]">
-                  <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%</span>
-                  <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
-                </div>
+                {hasPromo && (
+                  <div className="flex justify-between text-[#2C63AE]">
+                    <span className="font-semibold">Promo combo</span>
+                    <span className="font-semibold">-${pricing.promoSavings.toFixed(2)}</span>
+                  </div>
+                )}
+                {vipEligible && (
+                  <div className="flex justify-between text-[#2C63AE]">
+                    <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%</span>
+                    <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -239,7 +260,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 className="text-sm font-semibold text-[#16232F]"
                 style={{ fontFamily: "'Inter Variable', Inter, sans-serif" }}
               >
-                {vipEligible ? 'Total estimado' : 'Subtotal'}
+                {showBreakdown ? 'Total estimado' : 'Subtotal'}
               </span>
               <div className="text-right">
                 <span
@@ -249,7 +270,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   ${(subtotal - vipDiscount).toFixed(2)}
                 </span>
                 <span className="block text-[11px] text-[#5A6E85] mt-0.5">
-                  {vipEligible ? 'IVA incluido · se confirma al registrar el pedido' : 'IVA incluido'}
+                  {showBreakdown ? 'IVA incluido · se confirma al registrar el pedido' : 'IVA incluido'}
                 </span>
               </div>
             </div>

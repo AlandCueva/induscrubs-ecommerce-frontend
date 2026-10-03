@@ -30,13 +30,20 @@ export interface OrderDiscount {
   amount: number;
 }
 
-// Everything here comes from verify-and-create-order, which computes the VIP
-// discount server-side. `total` is what the customer actually pays.
+export interface OrderPromo {
+  applied: boolean;
+  amount: number;
+}
+
+// Everything here comes from verify-and-create-order, which computes the brand
+// combo promo and the VIP discount server-side. `total` is what the customer
+// actually pays; `originalTotal` is the full-price total before either discount.
 export interface CreatePublicOrderResult {
   orderNumber: string;
   total: number;
   originalTotal: number;
   discount: OrderDiscount;
+  promo: OrderPromo;
 }
 
 export class OrderSubmissionError extends Error {
@@ -97,6 +104,7 @@ export async function submitPublicOrder(
     total?: number;
     originalTotal?: number;
     discount?: { applied?: boolean; amount?: number };
+    promo?: { applied?: boolean; amount?: number };
   } | null = null;
   try {
     json = await res.json();
@@ -115,6 +123,7 @@ export async function submitPublicOrder(
 
   const total = json.total ?? 0;
   const discountApplied = json.discount?.applied === true;
+  const promoApplied = json.promo?.applied === true;
 
   return {
     orderNumber: json.orderNumber,
@@ -123,6 +132,10 @@ export async function submitPublicOrder(
     discount: {
       applied: discountApplied,
       amount: discountApplied ? json.discount?.amount ?? 0 : 0,
+    },
+    promo: {
+      applied: promoApplied,
+      amount: promoApplied ? json.promo?.amount ?? 0 : 0,
     },
   };
 }

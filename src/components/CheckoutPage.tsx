@@ -31,6 +31,9 @@ import {
   CreatePublicOrderResult,
 } from '../lib/orders';
 import { VIP_DISCOUNT_PERCENT, computeVipDiscount, useVipEligibility } from '../lib/vip';
+import { useBrandPromotions } from '../lib/brandPromotions';
+import { calcBrandPromo } from '../lib/calcBrandPromo';
+import { BrandPromoLine } from './BrandPromoLine';
 
 interface BankOption {
   id: string;
@@ -131,7 +134,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
   const showVipPreview =
     !orderResult && vipEligible && (typedEmail === '' || typedEmail === vipEmail);
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  // Brand combo promo: `subtotal` is the promo-adjusted items subtotal, so the
+  // PayPhone fee, VIP preview and total all build on it.
+  const { promotions } = useBrandPromotions();
+  const pricing = calcBrandPromo(items, promotions);
+  const hasPromo = pricing.groups.length > 0;
+  const subtotal = pricing.subtotal;
   const payphoneFee = paymentMethod === 'PayPhone' ? subtotal * 0.05 : 0;
   const shippingFee = shippingScope === 'Nacional' ? NATIONAL_SHIPPING_FEE : 0;
   const vipDiscount = showVipPreview ? computeVipDiscount(subtotal) : 0;
@@ -380,19 +388,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                     <span>Número de pedido:</span>
                     <span className="font-semibold text-[#16232F]">{orderResult.orderNumber}</span>
                   </div>
+                  {(orderResult.promo.applied || orderResult.discount.applied) && (
+                    <div className="flex justify-between text-xs text-[#5A6E85]">
+                      <span>Total sin descuento:</span>
+                      <span className="font-semibold text-[#16232F]">
+                        ${orderResult.originalTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {orderResult.promo.applied && (
+                    <div className="flex justify-between text-xs text-[#2C63AE]">
+                      <span className="font-semibold">Promo combo:</span>
+                      <span className="font-semibold">-${orderResult.promo.amount.toFixed(2)}</span>
+                    </div>
+                  )}
                   {orderResult.discount.applied && (
-                    <>
-                      <div className="flex justify-between text-xs text-[#5A6E85]">
-                        <span>Total sin descuento:</span>
-                        <span className="font-semibold text-[#16232F]">
-                          ${orderResult.originalTotal.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs text-[#2C63AE]">
-                        <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
-                        <span className="font-semibold">-${orderResult.discount.amount.toFixed(2)}</span>
-                      </div>
-                    </>
+                    <div className="flex justify-between text-xs text-[#2C63AE]">
+                      <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
+                      <span className="font-semibold">-${orderResult.discount.amount.toFixed(2)}</span>
+                    </div>
                   )}
                   <div className="flex justify-between text-xs text-[#5A6E85]">
                     <span>Total del pedido:</span>
@@ -1102,23 +1116,31 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                               <div className="pt-3 border-t border-[#EAEFF4] bg-[#F7F9FB] p-3.5 rounded-[6px] border border-[#EAEFF4] space-y-2">
                                 {/* This step only renders for Loja + Transferencia (no shipping or
                                     PayPhone fee), so `subtotal` is the full pre-discount price here. */}
-                                {showVipPreview && (
+                                {(showVipPreview || hasPromo) && (
                                   <>
                                     <div className="flex justify-between text-xs text-[#5A6E85]">
                                       <span>Precio total:</span>
                                       <span className="font-semibold text-[#16232F]">
-                                        ${subtotal.toFixed(2)}
+                                        ${pricing.regularSubtotal.toFixed(2)}
                                       </span>
                                     </div>
-                                    <div className="flex justify-between text-xs text-[#2C63AE]">
-                                      <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
-                                      <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
-                                    </div>
+                                    {hasPromo && (
+                                      <div className="flex justify-between text-xs text-[#2C63AE]">
+                                        <span className="font-semibold">Promo combo:</span>
+                                        <span className="font-semibold">-${pricing.promoSavings.toFixed(2)}</span>
+                                      </div>
+                                    )}
+                                    {showVipPreview && (
+                                      <div className="flex justify-between text-xs text-[#2C63AE]">
+                                        <span className="font-semibold">Descuento VIP -{VIP_DISCOUNT_PERCENT}%:</span>
+                                        <span className="font-semibold">-${vipDiscount.toFixed(2)}</span>
+                                      </div>
+                                    )}
                                   </>
                                 )}
                                 <div
                                   className={`flex items-center justify-between ${
-                                    showVipPreview ? 'pt-2 border-t border-[#EAEFF4]' : ''
+                                    showVipPreview || hasPromo ? 'pt-2 border-t border-[#EAEFF4]' : ''
                                   }`}
                                 >
                                   <span className="text-xs sm:text-sm font-semibold text-[#16232F]">
@@ -1326,11 +1348,22 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ items, onNavigate, o
                 ))}
               </div>
 
+              {pricing.groups.map((group) => (
+                <BrandPromoLine key={`${group.singleItemPrice}|${group.pairPrice}`} group={group} />
+              ))}
+
               <div className="pt-3 border-t border-[#EAEFF4] space-y-2.5 text-xs text-[#5A6E85]">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-semibold text-[#16232F]">${subtotal.toFixed(2)}</span>
+                  <span className="font-semibold text-[#16232F]">${pricing.regularSubtotal.toFixed(2)}</span>
                 </div>
+
+                {hasPromo && (
+                  <div className="flex justify-between items-center text-[#2C63AE]">
+                    <span className="font-semibold">Promo combo</span>
+                    <span className="font-semibold">-${pricing.promoSavings.toFixed(2)}</span>
+                  </div>
+                )}
 
                 {shippingScope === 'Nacional' ? (
                   <div className="flex justify-between items-center">
