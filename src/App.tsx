@@ -7,6 +7,7 @@ import { ColorPaletteSection } from './components/ColorPaletteSection';
 import { MarqueeSection } from './components/MarqueeSection';
 import { ScrollScrubSection } from './components/ScrollScrubSection';
 import { BestSellersSection } from './components/BestSellersSection';
+import { LookGoodOnYouSection } from './components/LookGoodOnYouSection';
 import { CategoryGridSection } from './components/CategoryGridSection';
 import { LocationSection } from './components/LocationSection';
 import { TestimonialsSection } from './components/TestimonialsSection';
@@ -160,6 +161,9 @@ export default function App() {
 
             {/* 6. Scroll Scrub (Negro) "Nuestro Best Seller" — temporarily hidden */}
             {/* <ScrollScrubSection /> */}
+
+            {/* Mira cómo se ve en ti (reels) */}
+            <LookGoodOnYouSection />
 
             {/* 7. Compra por Categoría (2x2 Grid) */}
             <CategoryGridSection onNavigate={handleNavigate} />
