@@ -67,6 +67,15 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 <li>
                   <button
                     type="button"
+                    onClick={() => onNavigate?.('discounts')}
+                    className="hover:text-[#FFFFFF] hover:underline transition-colors text-left cursor-pointer"
+                  >
+                    Descuentos
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
                     onClick={() => onNavigate?.('catalog', { filterType: 'gender', value: 'Mujer' })}
                     className="hover:text-[#FFFFFF] hover:underline transition-colors text-left cursor-pointer"
                   >

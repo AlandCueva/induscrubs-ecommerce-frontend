@@ -7,7 +7,7 @@ import { formatPromoPrice } from '../lib/calcBrandPromo';
 
 interface HeaderProps {
   currentView: string;
-  onNavigate: (view: 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites', extra?: any) => void;
+  onNavigate: (view: 'home' | 'catalog' | 'discounts' | 'pdp' | 'cart' | 'b2b' | 'favorites', extra?: any) => void;
   cartCount: number;
   onOpenCart: () => void;
   onOpenSearch: () => void;
@@ -79,10 +79,11 @@ export const Header: React.FC<HeaderProps> = ({
     })),
   ];
 
-  // Nav links: Mujer, Hombre, Scrubs, Marcas, Colección, Locaciones
+  // Nav links: Mujer, Hombre, Descuentos, Scrubs, Marcas, Colección, Locaciones
   const navLinks: NavLink[] = [
     { label: 'Mujer', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Mujer' }) },
     { label: 'Hombre', action: () => onNavigate('catalog', { filterType: 'gender', value: 'Hombre' }) },
+    { label: 'Descuentos', action: () => onNavigate('discounts') },
     { label: 'Scrubs', targetId: 'best-sellers' },
     { label: 'Marcas', targetId: 'nuestras-marcas' },
     { label: 'Colección', action: () => onNavigate('catalog') },

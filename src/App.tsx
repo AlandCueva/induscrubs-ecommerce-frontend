@@ -13,6 +13,7 @@ import { LocationSection } from './components/LocationSection';
 import { TestimonialsSection } from './components/TestimonialsSection';
 import { CtaBannerSection } from './components/CtaBannerSection';
 import { CatalogPage } from './components/CatalogPage';
+import { DiscountsPage } from './components/DiscountsPage';
 import { PDPPage } from './components/PDPPage';
 import { CheckoutPage } from './components/CheckoutPage';
 import { CartDrawer } from './components/CartDrawer';
@@ -185,6 +186,8 @@ export default function App() {
             initialFilter={initialFilter}
           />
         )}
+
+        {currentView === 'discounts' && <DiscountsPage onNavigate={handleNavigate} />}
 
         {currentView === 'pdp' && (
           <PDPPage

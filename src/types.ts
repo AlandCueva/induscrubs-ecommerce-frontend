@@ -1,4 +1,4 @@
-export type AppView = 'home' | 'catalog' | 'pdp' | 'cart' | 'b2b' | 'favorites' | 'legal';
+export type AppView = 'home' | 'catalog' | 'discounts' | 'pdp' | 'cart' | 'b2b' | 'favorites' | 'legal';
 
 export interface CartItem {
   id: string;
